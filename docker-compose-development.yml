@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Development setup with SQLite
+  Cortex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+      - "8081:8081"  # Admin API
+    environment:
+      - ROUTER_API_KEY=${ROUTER_API_KEY:-dev-key-change-me}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - ./config-with-database.json:/app/config.json:ro
+      - ./data:/app/data
+    networks:
+      - router-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis for enhanced caching in production
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - router-network
+
+volumes:
+  router_data:
+  # redis_data:
+
+networks:
+  router-network:
+    driver: bridge

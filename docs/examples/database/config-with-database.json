@@ -1,0 +1,170 @@
+{
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307",
+        "claude-3-5-haiku-20241022"
+      ]
+    },
+    {
+      "name": "openai",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4-turbo-preview",
+        "gpt-4",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo",
+        "gpt-4o",
+        "gpt-4o-mini"
+      ]
+    },
+    {
+      "name": "openrouter",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENROUTER_API_KEY}",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "models": [
+        "anthropic/claude-3.5-sonnet",
+        "openai/gpt-4-turbo",
+        "meta-llama/llama-3.1-70b-instruct"
+      ]
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openai",
+    "think": "anthropic",
+    "longContext": "anthropic",
+    "webSearch": "openai",
+    "vision": "openai",
+    "longContextThreshold": 100000
+  },
+  "APIKEY": "${ROUTER_API_KEY}",
+  "PROXY_URL": "",
+  "HOST": "0.0.0.0",
+  "PORT": 8082,
+  "Database": {
+    "enabled": true,
+    "primary": {
+      "type": "sqlite",
+      "sqlite_path": "./data/router.db",
+      "sqlite_wal_mode": true,
+      "sqlite_cache_size": 2000,
+      "max_open_conns": 25,
+      "max_idle_conns": 5,
+      "conn_max_lifetime": "5m",
+      "conn_max_idle_time": "1m",
+      "batch_size": 100,
+      "flush_interval": "5s"
+    },
+    "fallback": {
+      "use_file_on_failure": true,
+      "config_path": "config.json",
+      "retry_delay": "30s",
+      "sync_on_recovery": true
+    },
+    "cache": {
+      "enabled": true,
+      "ttl": "5m",
+      "max_entries": 1000,
+      "cleanup_interval": "10m"
+    }
+  },
+  "ModelGroups": {
+    "anthropic-claude": {
+      "name": "anthropic-claude",
+      "description": "All Claude models from Anthropic",
+      "providers": [
+        {
+          "name": "anthropic",
+          "models": [
+            {
+              "model": "claude-3-5-sonnet-20241022",
+              "alias": "claude-sonnet"
+            },
+            {
+              "model": "claude-3-opus-20240229",
+              "alias": "claude-opus"
+            },
+            {
+              "model": "claude-3-haiku-20240307",
+              "alias": "claude-haiku"
+            },
+            {
+              "model": "claude-3-5-haiku-20241022",
+              "alias": "claude-fast"
+            }
+          ]
+        }
+      ]
+    },
+    "openai-gpt": {
+      "name": "openai-gpt",
+      "description": "All GPT models from OpenAI",
+      "providers": [
+        {
+          "name": "openai",
+          "models": [
+            {
+              "model": "gpt-4o",
+              "alias": "gpt-latest"
+            },
+            {
+              "model": "gpt-4-turbo",
+              "alias": "gpt-powerful"
+            },
+            {
+              "model": "gpt-4o-mini",
+              "alias": "gpt-efficient"
+            },
+            {
+              "model": "gpt-3.5-turbo",
+              "alias": "gpt-standard"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "ClientAPIKeys": [
+    {
+      "keyId": "user_1",
+      "apiKey": "${USER_1_API_KEY}",
+      "description": "Development user key",
+      "rateLimit": 1000,
+      "modelAccess": [
+        "anthropic-claude",
+        "openai-gpt"
+      ],
+      "features": [
+        "vision",
+        "tools",
+        "streaming"
+      ],
+      "enabled": true
+    },
+    {
+      "keyId": "user_2",
+      "apiKey": "${USER_2_API_KEY}",
+      "description": "Production user key",
+      "rateLimit": 5000,
+      "modelAccess": [
+        "anthropic-claude"
+      ],
+      "features": [
+        "vision",
+        "tools",
+        "streaming"
+      ],
+      "enabled": true
+    }
+  ]
+}

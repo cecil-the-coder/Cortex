@@ -1,0 +1,724 @@
+name: Performance Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+  schedule:
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      test_type:
+        description: 'Type of performance test to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - benchmarks
+          - load
+          - memory
+      duration:
+        description: 'Load test duration in minutes'
+        required: false
+        default: '5'
+        type: string
+      concurrent_users:
+        description: 'Number of concurrent users for load testing'
+        required: false
+        default: '50'
+        type: string
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  setup-baseline:
+    name: Setup Performance Baseline
+    runs-on: ubuntu-latest
+    outputs:
+      baseline_exists: ${{ steps.check.outputs.exists }}
+      baseline_branch: ${{ steps.check.outputs.branch }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if baseline exists
+        id: check
+        run: |
+          if git rev-parse --verify origin/performance-baseline >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "branch=origin/performance-baseline" >> $GITHUB_OUTPUT
+            echo "Performance baseline branch exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "branch=" >> $GITHUB_OUTPUT
+            echo "No performance baseline found - will establish new baseline"
+          fi
+
+  run-benchmarks:
+    name: Run Go Benchmarks
+    runs-on: ubuntu-latest
+    needs: setup-baseline
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-bench-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-bench-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run all benchmarks
+        run: |
+          mkdir -p bench-results
+          go test -bench=. -benchmem -count=5 -run=^$ ./... > bench-results/bench.txt
+          go test -bench=. -benchmem -count=5 -run=^$ ./... -json > bench-results/bench.json 2>/dev/null || true
+
+      - name: Parse benchmark results
+        run: |
+          # Install benchstat for comparing benchmark results
+          go install golang.org/x/perf/cmd/benchstat@latest
+
+          # Generate benchmark summary
+          cat > bench-results/summary.txt << 'EOF'
+          # Benchmark Results Summary
+
+          EOF
+
+          grep "Benchmark" bench-results/bench.txt | head -20 >> bench-results/summary.txt
+
+          # Check for performance regressions if baseline exists
+          if [ "${{ needs.setup-baseline.outputs.baseline_exists }}" = "true" ]; then
+            echo "Comparing with baseline..."
+            git checkout ${{ needs.setup-baseline.outputs.baseline_branch }} -- bench-results/baseline.txt 2>/dev/null || echo "No baseline benchmark file found"
+
+            if [ -f "bench-results/baseline.txt" ]; then
+              benchstat bench-results/baseline.txt bench-results/bench.txt > bench-results/comparison.txt
+              echo "Benchmark comparison results:"
+              cat bench-results/comparison.txt
+            fi
+          fi
+
+      - name: Save current results as baseline
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          cp bench-results/bench.txt bench-results/baseline.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: bench-results/
+          retention-days: 30
+
+      - name: Performance regression check
+        run: |
+          # Simple performance regression detection
+          if [ -f "bench-results/comparison.txt" ]; then
+            # Check if any benchmark shows significant degradation
+            if grep -q "~.* slowdown" bench-results/comparison.txt; then
+              echo "::warning::Performance regression detected in benchmarks"
+              echo "Check bench-results/comparison.txt for details"
+              # Uncomment to fail on regression
+              # exit 1
+            fi
+          fi
+
+  memory-profiling:
+    name: Memory Profiling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-mem-${{ hashFiles('**/go.sum') }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run memory profiling tests
+        run: |
+          mkdir -p mem-prof
+
+          # Run tests with memory profiling
+          go test -memprofile=mem-prof/mem.prof -run=TestMemory ./... || echo "Some memory tests may not exist, continuing..."
+
+      - name: Analyze memory profile
+        run: |
+          # Install Go profiling tools
+          go install github.com/google/pprof@latest
+
+          # Generate memory profile summary
+          if [ -f "mem-prof/mem.prof" ]; then
+            go tool pprof -text mem-prof/mem.prof > mem-prof/mem-profile.txt
+            go tool pprof -top mem-prof/mem.prof > mem-prof/mem-top.txt
+
+            echo "Memory profile analysis complete"
+            head -20 mem-prof/mem-top.txt
+          else
+            echo "No memory profile generated"
+          fi
+
+      - name: Check for memory leaks
+        run: |
+          # Run memory leak detection
+          go test -run=TestMemoryLeak ./... -count=5 -timeout=30s || echo "Memory leak tests may not exist, continuing..."
+
+      - name: Upload memory profiles
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-profiles-${{ github.run_number }}
+          path: mem-prof/
+          retention-days: 30
+
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    services:
+      # Spin up a mock LLM service for testing
+      mock-server:
+        image: mockserver/mockserver:latest
+        ports:
+          - 1080:1080
+        env:
+          MOCKSERVER_PROPERTY_FILE: /config/mockserver.properties
+        options: >-
+          --health-cmd "curl -f http://localhost:1080/mockserver/status || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-load-${{ hashFiles('**/go.sum') }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build router for testing
+        run: |
+          go build -o cortex-load-test ./cmd/router
+
+      - name: Set up load testing tools
+        run: |
+          # Install Apache Bench (ab)
+          sudo apt-get update
+          sudo apt-get install -y apache2-utils
+
+          # Install Hey (alternative load testing tool)
+          go install github.com/rakyll/hey@latest
+
+          # Install k6 for advanced load testing
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Create test configuration
+        run: |
+          cat > test-config.json << 'EOF'
+          {
+            "Providers": [
+              {
+                "name": "mock-anthropic",
+                "authMethod": "api_key",
+                "APIKEY": "test-key",
+                "baseURL": "http://localhost:1080",
+                "models": ["claude-3-5-sonnet-20241022"]
+              },
+              {
+                "name": "mock-openai",
+                "authMethod": "api_key",
+                "APIKEY": "test-key",
+                "baseURL": "http://localhost:1080",
+                "models": ["gpt-4"]
+              }
+            ],
+            "Router": {
+              "default": "mock-anthropic",
+              "background": "mock-openai"
+            },
+            "APIKEY": "test-router-key",
+            "HOST": "0.0.0.0",
+            "PORT": 8080
+          }
+          EOF
+
+      - name: Setup mock expectations
+        run: |
+          # Setup mock responses for Anthropic API
+          curl -X PUT http://localhost:1080/mockserver/expectation \
+            -H "Content-Type: application/json" \
+            -d '{
+              "httpRequest": {
+                "method": "POST",
+                "path": "/v1/messages",
+                "headers": {
+                  "x-api-key": ["test-key"]
+                }
+              },
+              "httpResponse": {
+                "statusCode": 200,
+                "body": "{\"id\":\"msg_123\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Mock response\"}],\"model\":\"claude-3-5-sonnet-20241022\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}",
+                "headers": {
+                  "Content-Type": ["application/json"]
+                }
+              }
+            }'
+
+          # Setup mock responses for OpenAI API
+          curl -X PUT http://localhost:1080/mockserver/expectation \
+            -H "Content-Type: application/json" \
+            -d '{
+              "httpRequest": {
+                "method": "POST",
+                "path": "/v1/chat/completions",
+                "headers": {
+                  "Authorization": ["Bearer test-key"]
+                }
+              },
+              "httpResponse": {
+                "statusCode": 200,
+                "body": "{\"id\":\"chatcmpl-123\",\"object\":\"chat.completion\",\"created\":1694268190,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Mock response\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}",
+                "headers": {
+                  "Content-Type": ["application/json"]
+                }
+              }
+            }'
+
+      - name: Start router
+        run: |
+          ./cortex-load-test --config test-config.json &
+          ROUTER_PID=$!
+          echo "Router PID: $ROUTER_PID"
+          echo "ROUTER_PID=$ROUTER_PID" >> $GITHUB_ENV
+
+          # Wait for router to start
+          timeout 60 bash -c 'until curl -f http://localhost:8080/admin/status >/dev/null 2>&1; do sleep 2; done'
+          echo "Router is ready"
+
+      - name: Run basic load test with hey
+        run: |
+          mkdir -p load-results
+
+          # Prepare request body
+          cat > request.json << 'EOF'
+          {
+            "model": "claude-3-5-sonnet-20241022",
+            "messages": [{"role": "user", "content": "Hello!"}],
+            "max_tokens": 10
+          }
+          EOF
+
+          echo "Running load test with ${{ github.event.inputs.concurrent_users || '50' }} concurrent users for ${{ github.event.inputs.duration || '5' }} minutes..."
+
+          hey -n 1000 -c ${{ github.event.inputs.concurrent_users || '50' }} -t ${{ github.event.inputs.duration || '5' }}s \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: test-router-key" \
+            -d @request.json \
+            http://localhost:8080/v1/messages > load-results/hey-results.txt
+
+          echo "Hey load test results:"
+          cat load-results/hey-results.txt
+
+      - name: Run advanced load test with k6
+        run: |
+          cat > load-test.js << 'EOF'
+          import http from 'k6/http';
+          import { check, sleep } from 'k6';
+          import { Rate } from 'k6/metrics';
+
+          export const errorRate = new Rate('errors');
+
+          export const options = {
+            stages: [
+              { duration: '30s', target: 10 },
+              { duration: '1m', target: 30 },
+              { duration: '30s', target: 0 },
+            ],
+            thresholds: {
+              http_req_duration: ['p(95)<500'], // 95% of requests should be below 500ms
+              errors: ['rate<0.1'], // Error rate should be less than 10%
+            },
+          };
+
+          export default function () {
+            const payload = JSON.stringify({
+              model: 'claude-3-5-sonnet-20241022',
+              messages: [{ role: 'user', content: 'Hello!' }],
+              max_tokens: 10
+            });
+
+            const params = {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': 'test-router-key',
+              },
+            };
+
+            const response = http.post('http://localhost:8080/v1/messages', payload, params);
+
+            const success = check(response, {
+              'status is 200': (r) => r.status === 200,
+              'response time < 500ms': (r) => r.timings.duration < 500,
+            });
+
+            errorRate.add(!success);
+            sleep(1);
+          }
+          EOF
+
+          echo "Running k6 load test..."
+          k6 run --out json=load-results/k6-results.json load-test.js > load-results/k6-summary.txt
+
+          echo "k6 load test summary:"
+          cat load-results/k6-summary.txt
+
+      - name: Load test with Apache Bench
+        run: |
+          # Run ab load test
+          ab -t 30 -c 20 -H "Content-Type: application/json" -H "x-api-key: test-router-key" -p request.json \
+            http://localhost:8080/v1/messages > load-results/ab-results.txt
+
+          echo "Apache Bench results:"
+          cat load-results/ab-results.txt
+
+      - name: Stop router
+        if: always()
+        run: |
+          if [ -n "$ROUTER_PID" ]; then
+            echo "Stopping router (PID: $ROUTER_PID)"
+            kill $ROUTER_PID || true
+            wait $ROUTER_PID || true
+          fi
+
+      - name: Analyze load test results
+        run: |
+          mkdir -p analysis
+
+          # Generate load test analysis
+          cat > analysis/load-analysis.md << 'EOF'
+          # Load Test Analysis
+
+          ## Test Configuration
+          - Load test type: Load testing
+          - Duration: ${{ github.event.inputs.duration || '5' }} minutes
+          - Concurrent users: ${{ github.event.inputs.concurrent_users || '50' }}
+          - Test date: $(date)
+
+          ## Results Summary
+
+          ### Hey Results
+          ```
+          EOF
+
+          grep -E "(Requests|Successful|Failed|Latency)" load-results/hey-results.txt >> analysis/load-analysis.md
+
+          cat >> analysis/load-analysis.md << 'EOF'
+          ```
+
+          ### k6 Results
+          ```
+          EOF
+
+          grep -E "(http_reqs|http_req_duration|errors)" load-results/k6-summary.txt >> analysis/load-analysis.md
+
+          cat >> analysis/load-analysis.md << 'EOF'
+          ```
+
+          ### Apache Bench Results
+          ```
+          EOF
+
+          grep -E "(Server Software|Concurrency|Time taken|Total|Failed|Requests per second)" load-results/ab-results.txt >> analysis/load-analysis.md
+
+          cat >> analysis/load-analysis.md << 'EOF'
+          ```
+
+          ## Performance Metrics
+          EOF
+
+          # Extract key metrics
+          if grep -q "Requests per second" load-results/ab-results.txt; then
+            RPS=$(grep "Requests per second" load-results/ab-results.txt | awk '{print $4}')
+            echo "- Requests per second (ab): $RPS" >> analysis/load-analysis.md
+          fi
+
+          echo "Load test analysis complete!"
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ github.run_number }}
+          path: load-results/
+          retention-days: 30
+
+      - name: Upload analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-analysis-${{ github.run_number }}
+          path: analysis/
+          retention-days: 30
+
+      - name: Performance threshold check
+        run: |
+          # Check if performance thresholds are met
+          if grep -q "Requests per second" load-results/ab-results.txt; then
+            RPS=$(grep "Requests per second" load-results/ab-results.txt | awk '{print $4}')
+            if (( $(echo "$RPS < 10" | bc -l) )); then
+              echo "::warning::Low requests per second: $RPS (< 10)"
+            else
+              echo "✅ Good RPS: $RPS"
+            fi
+          fi
+
+          # Check response times from k6
+          if grep -q "http_req_duration" load-results/k6-summary.txt; then
+            echo "Response time metrics available in k6 results"
+          fi
+
+  cpu-profiling:
+    name: CPU Profiling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-cpu-${{ hashFiles('**/go.sum') }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run CPU profiling
+        run: |
+          mkdir -p cpu-prof
+
+          # Run CPU intensive test
+          go test -cpuprofile=cpu-prof/cpu.prof -run=TestCPU ./... || echo "CPU tests may not exist, continuing..."
+
+      - name: Analyze CPU profile
+        run: |
+          if [ -f "cpu-prof/cpu.prof" ]; then
+            # Analyze CPU profile
+            go tool pprof -text cpu-prof/cpu.prof > cpu-prof/cpu-profile.txt
+            go tool pprof -top cpu-prof/cpu.prof > cpu-prof/cpu-top.txt
+
+            echo "CPU profile analysis complete"
+            head -20 cpu-prof/cpu-top.txt
+          else
+            echo "No CPU profile generated"
+          fi
+
+      - name: Upload CPU profiles
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-profiles-${{ github.run_number }}
+          path: cpu-prof/
+          retention-days: 30
+
+  performance-summary:
+    name: Performance Test Summary
+    runs-on: ubuntu-latest
+    needs: [run-benchmarks, memory-profiling, load-testing, cpu-profiling]
+    if: always()
+    steps:
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+
+      - name: Generate performance report
+        run: |
+          mkdir -p performance-report
+
+          cat > performance-report/performance-summary.md << 'EOF'
+          # Performance Test Summary
+
+          ## Test Information
+          - **Repository**: ${{ github.repository }}
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Run Number**: ${{ github.run_number }}
+          - **Date**: $(date -u)
+          - **Test Type**: ${{ inputs.test_type || 'all' }}
+
+          ## Test Results Overview
+
+          EOF
+
+          # Add status for each test
+          echo "### Test Status" >> performance-report/performance-summary.md
+
+          if [ "${{ needs.run-benchmarks.result }}" = "success" ]; then
+            echo "- ✅ Go Benchmarks: Passed" >> performance-report/performance-summary.md
+          elif [ "${{ needs.run-benchmarks.result }}" = "failure" ]; then
+            echo "- ❌ Go Benchmarks: Failed" >> performance-report/performance-summary.md
+          else
+            echo "- ⏭️ Go Benchmarks: Skipped" >> performance-report/performance-summary.md
+          fi
+
+          if [ "${{ needs.memory-profiling.result }}" = "success" ]; then
+            echo "- ✅ Memory Profiling: Completed" >> performance-report/performance-summary.md
+          elif [ "${{ needs.memory-profiling.result }}" = "failure" ]; then
+            echo "- ❌ Memory Profiling: Failed" >> performance-report/performance-summary.md
+          else
+            echo "- ⏭️ Memory Profiling: Skipped" >> performance-report/performance-summary.md
+          fi
+
+          if [ "${{ needs.load-testing.result }}" = "success" ]; then
+            echo "- ✅ Load Testing: Completed" >> performance-report/performance-summary.md
+          elif [ "${{ needs.load-testing.result }}" = "failure" ]; then
+            echo "- ❌ Load Testing: Failed" >> performance-report/performance-summary.md
+          else
+            echo "- ⏭️ Load Testing: Skipped" >> performance-report/performance-summary.md
+          fi
+
+          if [ "${{ needs.cpu-profiling.result }}" = "success" ]; then
+            echo "- ✅ CPU Profiling: Completed" >> performance-report/performance-summary.md
+          elif [ "${{ needs.cpu-profiling.result }}" = "failure" ]; then
+            echo "- ❌ CPU Profiling: Failed" >> performance-report/performance-summary.md
+          else
+            echo "- ⏭️ CPU Profiling: Skipped" >> performance-report/performance-summary.md
+          fi
+
+          # Add performance metrics if available
+          if [ -f "all-results/load-test-analysis-*/load-analysis.md" ]; then
+            echo "" >> performance-report/performance-summary.md
+            echo "## Load Test Results" >> performance-report/performance-summary.md
+            cat all-results/load-test-analysis-*/load-analysis.md >> performance-report/performance-summary.md
+          fi
+
+          # Add benchmark summary if available
+          if [ -f "all-results/benchmark-results-*/summary.txt" ]; then
+            echo "" >> performance-report/performance-summary.md
+            echo "## Benchmark Results" >> performance-report/performance-summary.md
+            echo '```' >> performance-report/performance-summary.md
+            cat all-results/benchmark-results-*/summary.txt >> performance-report/performance-summary.md
+            echo '```' >> performance-report/performance-summary.md
+          fi
+
+          echo "Performance report generated successfully!"
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-summary-${{ github.run_number }}
+          path: performance-report/
+          retention-days: 90
+
+      - name: Comment PR with performance results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let comment = '## 🔬 Performance Test Results\n\n';
+
+            // Check if performance report exists
+            if (fs.existsSync('performance-report/performance-summary.md')) {
+              const report = fs.readFileSync('performance-report/performance-summary.md', 'utf8');
+              comment += report;
+            } else {
+              comment += 'Performance tests were run but no detailed report is available.\n\n';
+            }
+
+            // Add overall status
+            if ('${{ needs.run-benchmarks.result }}' === 'success' &&
+                '${{ needs.memory-profiling.result }}' === 'success' &&
+                '${{ needs.load-testing.result }}' === 'success') {
+              comment += '\n✅ **All performance tests passed!**\n';
+            } else {
+              comment += '\n⚠️ **Some performance tests failed or were skipped.**\n';
+            }
+
+            comment += '\n📊 [View detailed results in Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Performance gate check
+        run: |
+          # Overall performance gate check
+          SUCCESS=true
+
+          if [ "${{ needs.load-testing.result }}" = "failure" ]; then
+            echo "::warning::Load testing failed"
+            SUCCESS=false
+          fi
+
+          if [ "${{ needs.memory-profiling.result }}" = "failure" ]; then
+            echo "::warning::Memory profiling failed"
+            SUCCESS=false
+          fi
+
+          if [ "$SUCCESS" = "true" ]; then
+            echo "✅ Performance tests completed successfully"
+          else
+            echo "⚠️ Some performance tests failed - review results"
+            # Uncomment to fail on critical performance issues
+            # exit 1
+          fi

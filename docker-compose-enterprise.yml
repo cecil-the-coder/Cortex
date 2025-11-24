@@ -1,0 +1,251 @@
+version: '3.8'
+
+services:
+  # Enterprise setup with PostgreSQL and advanced features
+  Cortex-1:
+    image: Cortex:latest
+    ports:
+      - "8082:8082"
+      - "8081:8081"
+    environment:
+      - ROUTER_API_KEY=${ROUTER_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # Database configuration
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - DB_NAME=go_llm_router
+      - DB_USER=router_user
+      - DB_PASSWORD=${DB_PASSWORD}
+      # Instance ID for multi-node setups
+      - INSTANCE_ID=router-1
+    volumes:
+      - ./config-postgres.json:/app/config.json:ro
+      - logs:/app/logs
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      postgres-replica:
+        condition: service_healthy
+    networks:
+      - router-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # Primary PostgreSQL database
+  postgres-primary:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=go_llm_router
+      - POSTGRES_USER=router_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+    ports:
+      - "5432:5432"  # Primary DB
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - ./scripts/postgres-primary.conf:/etc/postgresql/postgresql.conf:ro
+      - ./scripts/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks:
+      - router-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U router_user -d go_llm_router"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c max_connections=500
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+
+  # Read replica for HA and scaling
+  postgres-replica:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=go_llm_router
+      - POSTGRES_MASTER_SERVICE=postgres-primary
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+    ports:
+      - "5433:5432"  # Replica DB
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+      - ./scripts/postgres-replica.conf:/etc/postgresql/postgresql.conf:ro
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    networks:
+      - router-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U router_user -d go_llm_router"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis cluster for enterprise caching
+  redis-cluster-1:
+    image: redis:7-alpine
+    ports:
+      - "7001:6379"
+    volumes:
+      - redis_cluster_1_data:/data
+    networks:
+      - router-network
+    restart: unless-stopped
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 512MB
+      --maxmemory-policy allkeys-lru
+
+  redis-cluster-2:
+    image: redis:7-alpine
+    ports:
+      - "7002:6379"
+    volumes:
+      - redis_cluster_2_data:/data
+    networks:
+      - router-network
+    restart: unless-stopped
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 512MB
+      --maxmemory-policy allkeys-lru
+
+  redis-cluster-3:
+    image: redis:7-alpine
+    ports:
+      - "7003:6379"
+    volumes:
+      - redis_cluster_3_data:/data
+    networks:
+      - router-network
+    restart: unless-stopped
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 512MB
+      --maxmemory-policy allkeys-lru
+
+  # Monitoring stack
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - router-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - router-network
+    restart: unless-stopped
+
+  # Load balancer (HAProxy)
+  haproxy:
+    image: haproxy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"  # HAProxy stats
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy/ssl:/etc/ssl/certs:ro
+    depends_on:
+      - Cortex-1
+    networks:
+      - router-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  postgres_primary_data:
+  postgres_replica_data:
+  redis_cluster_1_data:
+  redis_cluster_2_data:
+  redis_cluster_3_data:
+  prometheus_data:
+  grafana_data:
+  logs:
+
+networks:
+  router-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

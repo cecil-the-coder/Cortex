@@ -1,0 +1,60 @@
+{
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"]
+    },
+    {
+      "name": "openai",
+      "authMethod": "hybrid",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": ["gpt-4-turbo-preview", "gpt-4", "gpt-3.5-turbo", "gpt-4-vision-preview"],
+      "oauth": {
+        "client_id": "${OPENAI_CLIENT_ID}",
+        "client_secret": "${OPENAI_CLIENT_SECRET}",
+        "token_url": "https://api.openai.com/v1/oauth/token",
+        "auth_url": "https://api.openai.com/v1/oauth/authorize",
+        "scopes": "api:model:read api:data:read",
+        "redirect_url": "http://localhost:8080/oauth/callback/openai"
+      }
+    },
+    {
+      "name": "custom-llm",
+      "authMethod": "oauth",
+      "baseURL": "https://api.custom-llm-provider.com/v1",
+      "models": ["custom-pro", "custom-boost"],
+      "oauth": {
+        "client_id": "${CUSTOM_CLIENT_ID}",
+        "client_secret": "${CUSTOM_CLIENT_SECRET}",
+        "token_url": "https://auth.custom-llm-provider.com/oauth/token",
+        "auth_url": "https://auth.custom-llm-provider.com/oauth/authorize",
+        "scopes": "model:access rate-limit:read",
+        "redirect_url": "http://localhost:8080/oauth/callback/custom"
+      }
+    },
+    {
+      "name": "openrouter",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENROUTER_API_KEY}",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "models": ["anthropic/claude-3.5-sonnet", "openai/gpt-4-turbo-preview"]
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openrouter",
+    "think": "openai",
+    "longContext": "custom-llm",
+    "webSearch": "openrouter",
+    "vision": "openai",
+    "longContextThreshold": 200000
+  },
+  "APIKEY": "${ROUTER_API_KEY}",
+  "PROXY_URL": "${PROXY_URL}",
+  "HOST": "0.0.0.0",
+  "PORT": 8080
+}

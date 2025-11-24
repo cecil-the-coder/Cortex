@@ -1,0 +1,99 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cortex
+Cortex
+cortex-*
+
+# Test files
+*.test
+coverage.out
+*.prof
+
+# Temporary files
+*.tmp
+*.temp
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Local development
+config.json
+config-*.json
+.env
+.env.local
+*.key
+*.pem
+ssl/
+
+# Logs
+*.log
+logs/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache
+.cache/
+tmp/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Scripts not needed in container
+scripts/
+Makefile
+
+# Examples not needed in production
+examples/
+
+# Tests not needed in runtime
+tests/
+*_test.go
+
+# Build artifacts
+build/
+dist/
+out/
+
+# Package files
+*.tar.gz
+*.zip
+*.7z
+
+# Local development tools
+air.toml
+.air.toml
+.watch.toml
+
+# Coverage reports
+coverage.html
+coverage.xml

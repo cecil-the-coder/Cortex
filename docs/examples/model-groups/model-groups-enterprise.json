@@ -1,0 +1,269 @@
+{
+  "Providers": [
+    {
+      "name": "anthropic-internal",
+      "authMethod": "oauth",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307"
+      ],
+      "oauth": {
+        "client_id": "${ANTHROPIC_CLIENT_ID}",
+        "client_secret": "${ANTHROPIC_CLIENT_SECRET}",
+        "access_token": "${ANTHROPIC_ACCESS_TOKEN}",
+        "refresh_token": "${ANTHROPIC_REFRESH_TOKEN}",
+        "token_url": "https://oauth.anthropic.com/token",
+        "scopes": "claude.api"
+      }
+    },
+    {
+      "name": "openai-enterprise",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_ENTERPRISE_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4-turbo-preview",
+        "gpt-4",
+        "gpt-3.5-turbo"
+      ]
+    },
+    {
+      "name": "azure-openai",
+      "authMethod": "api_key",
+      "APIKEY": "${AZURE_OPENAI_API_KEY}",
+      "baseURL": "https://your-resource.openai.azure.com",
+      "models": [
+        "gpt-4-turbo",
+        "gpt-35-turbo"
+      ]
+    },
+    {
+      "name": "vertex-ai",
+      "authMethod": "oauth",
+      "baseURL": "https://generativelanguage.googleapis.com/v1",
+      "models": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash"
+      ],
+      "oauth": {
+        "client_id": "${GOOGLE_CLIENT_ID}",
+        "client_secret": "${GOOGLE_CLIENT_SECRET}",
+        "access_token": "${GOOGLE_ACCESS_TOKEN}",
+        "refresh_token": "${GOOGLE_REFRESH_TOKEN}",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "scopes": "https://www.googleapis.com/auth/generative-language"
+      }
+    }
+  ],
+  "ModelGroups": [
+    {
+      "name": "executive-suite",
+      "description": "Premium models for C-suite and strategic decision making",
+      "models": [
+        {
+          "provider": "anthropic-internal",
+          "model": "claude-3-opus-20240229",
+          "alias": "exec-claude"
+        },
+        {
+          "provider": "vertex-ai",
+          "model": "gemini-1.5-pro",
+          "alias": "exec-gemini"
+        }
+      ]
+    },
+    {
+      "name": "product-development",
+      "description": "Models optimized for product development and engineering",
+      "models": [
+        {
+          "provider": "anthropic-internal",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "dev-claude"
+        },
+        {
+          "provider": "openai-enterprise",
+          "model": "gpt-4-turbo-preview",
+          "alias": "dev-gpt"
+        }
+      ]
+    },
+    {
+      "name": "customer-support",
+      "description": "Cost-effective models for high-volume customer interactions",
+      "models": [
+        {
+          "provider": "anthropic-internal",
+          "model": "claude-3-haiku-20240307",
+          "alias": "support-claude"
+        },
+        {
+          "provider": "azure-openai",
+          "model": "gpt-35-turbo",
+          "alias": "support-gpt"
+        }
+      ]
+    },
+    {
+      "name": "data-analytics",
+      "description": "Models for business intelligence and data analysis",
+      "models": [
+        {
+          "provider": "openai-enterprise",
+          "model": "gpt-4-turbo-preview",
+          "alias": "analytics-gpt"
+        },
+        {
+          "provider": "vertex-ai",
+          "model": "gemini-1.5-pro",
+          "alias": "analytics-gemini"
+        }
+      ]
+    },
+    {
+      "name": "compliance-audit",
+      "description": "Models approved for compliance and audit workloads",
+      "models": [
+        {
+          "provider": "azure-openai",
+          "model": "gpt-4-turbo",
+          "alias": "compliance-gpt"
+        }
+      ]
+    },
+    {
+      "name": "innovation-lab",
+      "description": "Latest models for R&D and experimentation",
+      "models": [
+        {
+          "provider": "anthropic-internal",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "innovation-claude"
+        },
+        {
+          "provider": "vertex-ai",
+          "model": "gemini-1.5-flash",
+          "alias": "innovation-gemini"
+        },
+        {
+          "provider": "openai-enterprise",
+          "model": "gpt-4-turbo-preview",
+          "alias": "innovation-gpt"
+        }
+      ]
+    },
+    {
+      "name": "regional-compliance",
+      "description": "Models deployed in specific geographic regions for data residency",
+      "models": [
+        {
+          "provider": "azure-openai",
+          "model": "gpt-4-turbo",
+          "alias": "eu-gpt"
+        },
+        {
+          "provider": "anthropic-internal",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "us-claude"
+        }
+      ]
+    }
+  ],
+  "ClientAPIKeys": [
+    {
+      "apiKey": "sk-ceo-suite-001",
+      "allowed_model_groups": ["executive-suite"],
+      "metadata": {
+        "department": "executive",
+        "clearance": "level-5",
+        "cost_center": "c-suite",
+        "approved_models": ["exec-claude", "exec-gemini"]
+      },
+      "description": "CEO and C-suite access to premium models"
+    },
+    {
+      "apiKey": "sk-engineering-002",
+      "allowed_model_groups": ["product-development", "innovation-lab"],
+      "allowed_models": ["innovation-claude", "innovation-gpt"],
+      "metadata": {
+        "department": "engineering",
+        "clearance": "level-4",
+        "cost_center": "r-and-d",
+        "team": "platform"
+      },
+      "description": "Engineering team access for development work"
+    },
+    {
+      "apiKey": "sk-support-003",
+      "allowed_model_groups": ["customer-support"],
+      "metadata": {
+        "department": "customer-success",
+        "clearance": "level-2",
+        "cost_center": "operations",
+        "shift": "24x7"
+      },
+      "description": "Customer support team for high-volume interactions"
+    },
+    {
+      "apiKey": "sk-analytics-004",
+      "allowed_model_groups": ["data-analytics", "compliance-audit"],
+      "metadata": {
+        "department": "business-intelligence",
+        "clearance": "level-3",
+        "cost_center": "analytics",
+        "data_access": "pii-approved"
+      },
+      "description": "Business analytics team with approved data access"
+    },
+    {
+      "apiKey": "sk-legal-005",
+      "allowed_model_groups": ["compliance-audit", "regional-compliance"],
+      "metadata": {
+        "department": "legal",
+        "clearance": "level-5",
+        "cost_center": "legal",
+        "jurisdiction": ["us", "eu"],
+        "attorney_privilege": true
+      },
+      "description": "Legal department with compliance and regional restrictions"
+    },
+    {
+      "apiKey": "sk-research-006",
+      "allowed_model_groups": ["innovation-lab", "product-development"],
+      "allowed_models": ["exec-claude", "exec-gemini"],
+      "metadata": {
+        "department": "research",
+        "clearance": "level-4",
+        "cost_center": "innovation",
+        "experiment_approval": true
+      },
+      "description": "R&D team with special executive model access"
+    },
+    {
+      "apiKey": "sk-partner-007",
+      "allowed_model_groups": ["customer-support"],
+      "allowed_models": ["support-claude"],
+      "metadata": {
+        "department": "partners",
+        "clearance": "level-1",
+        "cost_center": "partner-success",
+        "partner_id": "partner-123",
+        "rate_limit": "1000/hr"
+      },
+      "description": "External partner access with rate limiting"
+    }
+  ],
+  "Router": {
+    "default": "anthropic-internal",
+    "background": "azure-openai",
+    "longContext": "vertex-ai",
+    "think": "anthropic-internal",
+    "webSearch": "openai-enterprise",
+    "longContextThreshold": 100000
+  },
+  "APIKEY": "${ROUTER_API_KEY}",
+  "HOST": "0.0.0.0",
+  "PORT": 8080
+}

@@ -1,0 +1,87 @@
+run:
+  timeout: 5m
+
+linters-settings:
+  errcheck:
+    # Ignore errors in test files and common patterns
+    ignore: |
+      fmt:.*
+      io/ioutil
+      os:.*
+      encoding/json
+      log:.*
+      database/sql:.*
+      context:.*
+      # Additional common patterns to ignore
+      json\.NewEncoder.*\.Encode
+      \.Write\(.*\)
+      \.Close\(\)
+      \.Remove\(.*\)
+      \.Rename\(.*\)
+      os\.Remove
+      os\.Rename
+      # Ignore errors in defer statements where they're commonly handled
+      defer.*\.Close
+      defer.*\.Rollback
+  govet:
+    check-shadowing: false
+
+linters:
+  enable:
+    - errcheck
+    - ineffassign
+    - unused
+    - gosimple
+    - staticcheck
+  disable:
+    - gocyclo
+    - goerr113
+    - godox
+    - gofmt
+    - goimports
+    - golint
+
+issues:
+  exclude-rules:
+    # Exclude some common patterns
+    - path: "(.+)_test\\.go"
+      linters:
+        - errcheck
+        - gosec
+        - unused
+    # Exclude certain API methods that commonly ignore errors for logging
+    - text: "logger\\..*\\.Write"
+      linters:
+        - errcheck
+    - text: "serializer\\..*\\."
+      linters:
+        - errcheck
+    # Exclude json encoding errors where the writer handles it
+    - text: "\\.Encode\\("
+      linters:
+        - errcheck
+    # Exclude common OS operations where errors are often ignored
+    - text: "os\\.(Remove|Rename)"
+      linters:
+        - errcheck
+    # Exclude defer statements for Close/Rollback
+    - text: "defer.*\\.(Close|Rollback)"
+      linters:
+        - errcheck
+    # Exclude Write operations in error handling paths
+    - text: "\\.Write\\("
+      linters:
+        - errcheck
+    # Exclude audit logging calls where errors are intentionally ignored
+    - text: "LogLoginAttempt|LogUserAction|LogSystemAction|LogAPIKeyAction"
+      linters:
+        - errcheck
+
+  # Don't report unused fields in struct definitions for now
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true

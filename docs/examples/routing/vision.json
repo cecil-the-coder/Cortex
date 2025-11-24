@@ -1,0 +1,161 @@
+{
+  "comment": "Example configuration demonstrating vision routing capabilities",
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307"
+      ]
+    },
+    {
+      "name": "openai",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-vision-preview",
+        "gpt-4-turbo-preview"
+      ]
+    },
+    {
+      "name": "google",
+      "authMethod": "api_key",
+      "APIKEY": "${GOOGLE_API_KEY}",
+      "baseURL": "https://generativelanguage.googleapis.com/v1",
+      "models": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-pro-vision"
+      ]
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openai",
+    "think": "anthropic",
+    "longContext": "google",
+    "webSearch": "openai",
+    "vision": "openai",
+    "longContextThreshold": 100000
+  },
+  "ModelGroups": {
+    "production": {
+      "description": "Production models with optimal routing for different task types",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "claude-sonnet",
+          "maxContextTokens": 200000
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4o",
+          "alias": "gpt4o",
+          "maxContextTokens": 128000
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-opus-20240229",
+          "alias": "claude-opus",
+          "maxContextTokens": 200000
+        }
+      ]
+    },
+    "vision-models": {
+      "description": "Vision-capable models for image processing tasks",
+      "models": [
+        {
+          "provider": "openai",
+          "model": "gpt-4o",
+          "alias": "vision-best"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "vision-claude"
+        },
+        {
+          "provider": "google",
+          "model": "gemini-1.5-pro",
+          "alias": "vision-gemini"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "alias": "vision-fast"
+        }
+      ]
+    },
+    "vision-economy": {
+      "description": "Cost-effective vision models for high-volume image processing",
+      "models": [
+        {
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "alias": "vision-econ"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "vision-haiku"
+        }
+      ]
+    },
+    "background": {
+      "description": "Fast models for background and low-latency tasks",
+      "models": [
+        {
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "alias": "bg-fast"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "bg-haiku"
+        }
+      ]
+    }
+  },
+  "ClientAPIKeys": {
+    "vision-app": {
+      "apiKey": "sk-vision-app-key-placeholder",
+      "description": "Vision application with access to all vision models",
+      "modelGroups": ["vision-models", "production"],
+      "enabled": true,
+      "rateLimit": 500
+    },
+    "cost-optimised-vision": {
+      "apiKey": "sk-econ-vision-key-placeholder",
+      "description": "Cost-optimized vision application using economy models",
+      "modelGroups": ["vision-economy"],
+      "enabled": true,
+      "rateLimit": 2000
+    },
+    "production-app": {
+      "apiKey": "sk-production-key-placeholder",
+      "description": "Production application with full access including vision",
+      "modelGroups": ["production", "vision-models", "background"],
+      "enabled": true,
+      "rateLimit": 1000
+    },
+    "text-only-app": {
+      "apiKey": "sk-text-only-key-placeholder",
+      "description": "Text-only application (no vision access)",
+      "modelGroups": ["production", "background"],
+      "enabled": true,
+      "rateLimit": 1500
+    }
+  },
+  "HOST": "0.0.0.0",
+  "PORT": 8080,
+  "APIKEY": "${ROUTER_API_KEY}"
+}

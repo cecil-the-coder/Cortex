@@ -1,0 +1,103 @@
+{
+  "admin": {
+    "enabled": true,
+    "listen_address": "0.0.0.0:8080",
+    "tls": {
+      "enabled": true,
+      "cert_file": "/etc/ssl/certs/router.crt",
+      "key_file": "/etc/ssl/private/router.key",
+      "min_version": "1.2"
+    },
+    "auth": {
+      "jwt_secret": "your-very-secure-random-secret-key-change-this-in-production",
+      "token_expiry": "1h",
+      "refresh_token_expiry": "168h",
+      "session_expiry": "8h",
+      "bcrypt_cost": 12
+    },
+    "database": {
+      "driver": "postgres",
+      "dsn": "postgres://router_user:secure_password@localhost/go_llm_router?sslmode=require",
+      "max_open_conns": 25,
+      "max_idle_conns": 5,
+      "conn_max_lifetime": "1h"
+    },
+    "redis": {
+      "enabled": true,
+      "addr": "localhost:6379",
+      "password": "",
+      "db": 1,
+      "pool_size": 10
+    },
+    "security": {
+      "cors": {
+        "allowed_origins": ["https://admin.example.com", "https://app.example.com"],
+        "allowed_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "allowed_headers": ["Content-Type", "Authorization", "X-API-Key"],
+        "exposed_headers": ["X-RateLimit-*"],
+        "max_age": 86400,
+        "credentials": true
+      },
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-inline'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data:",
+        "font-src": "'self'",
+        "connect-src": "'self'",
+        "frame-ancestors": "'none'",
+        "form-action": "'self'"
+      },
+      "rate_limiting": {
+        "enabled": true,
+        "store": "redis",
+        "burst_multiplier": 3,
+        "cleanup_interval": "5m"
+      },
+      "audit": {
+        "enabled": true,
+        "log_all_requests": false,
+        "log_failed_auth": true,
+        "log_admin_actions": true,
+        "retention_days": 90
+      }
+    }
+  },
+  "users": {
+    "default_roles": {
+      "auto_created": "support"
+    },
+    "password_policy": {
+      "min_length": 8,
+      "require_uppercase": true,
+      "require_lowercase": true,
+      "require_numbers": true,
+      "require_special": true,
+      "max_age_days": 90,
+      "prevent_reuse": 5
+    },
+    "tfa": {
+      "issuer": "Cortex",
+      "backup_codes_count": 10,
+      "backup_code_length": 8
+    }
+  },
+  "api_keys": {
+    "defaults": {
+      "default_role": "viewer",
+      "default_expiry": "720h",
+      "max_expiry": "8760h",
+      "max_keys_per_user": 50
+    },
+    "rotation": {
+      "auto_rotate": false,
+      "warning_days": 7
+    }
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output": "stdout",
+    "audit_output": "/var/log/Cortex/audit.log"
+  }
+}

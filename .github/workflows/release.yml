@@ -1,0 +1,382 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Semantic versioning tags (v1.0.0, v1.1.0, etc.)
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'  # Release candidates (v1.0.0-rc1)
+      - 'v[0-9]+.[0-9]+.[0-9]+-beta[0-9]+'  # Beta releases (v1.0.0-beta1)
+      - 'v[0-9]+.[0-9]+.[0-9]+-alpha[0-9]+'  # Alpha releases (v1.0.0-alpha1)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create draft release'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GO_VERSION: '1.22'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/cecil-the-coder/cortex
+
+jobs:
+  extract-version:
+    name: Extract Version Information
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      semver_major: ${{ steps.version.outputs.semver_major }}
+      semver_minor: ${{ steps.version.outputs.semver_minor }}
+      semver_patch: ${{ steps.version.outputs.semver_patch }}
+    steps:
+      - name: Extract version from tag or input
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this is a pre-release
+          if [[ "$VERSION" =~ -(alpha|beta|rc) ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Extract semver components
+          if [[ "$VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            echo "semver_major=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "semver_minor=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
+            echo "semver_patch=${BASH_REMATCH[3]}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Release version: $VERSION"
+
+  build-and-test:
+    name: Build and Test Release
+    runs-on: ubuntu-latest
+    needs: extract-version
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-release-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-release-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run tests with race detection
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Run integration tests
+        run: go test -v -race -tags=integration ./tests/...
+
+      - name: Ensure test coverage meets minimum
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Test coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+            echo "::error::Test coverage is below 70% threshold"
+            exit 1
+          fi
+
+      - name: Run linting
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.62.0
+          args: --timeout=5m
+
+      - name: Build release binaries
+        run: |
+          mkdir -p dist
+
+          # Build for multiple architectures
+          GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s -X main.version=${{ needs.extract-version.outputs.version }}" -o dist/cortex-linux-amd64 ./cmd/router
+          GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s -X main.version=${{ needs.extract-version.outputs.version }}" -o dist/cortex-linux-arm64 ./cmd/router
+          GOOS=darwin GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s -X main.version=${{ needs.extract-version.outputs.version }}" -o dist/cortex-darwin-amd64 ./cmd/router
+          GOOS=darwin GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s -X main.version=${{ needs.extract-version.outputs.version }}" -o dist/cortex-darwin-arm64 ./cmd/router
+          GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s -X main.version=${{ needs.extract-version.outputs.version }}" -o dist/cortex-windows-amd64.exe ./cmd/router
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cd ..
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: dist/
+          retention-days: 7
+
+  generate-changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    needs: [extract-version, build-and-test]
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            # First release - get all commits
+            GIT_RANGE=""
+          else
+            GIT_RANGE="$PREV_TAG..HEAD"
+          fi
+
+          # Generate changelog
+          cat << 'EOF' > CHANGELOG.md
+          # Changelog
+
+          ## [${{ needs.extract-version.outputs.version }}] - $(date +%Y-%m-%d)
+
+          EOF
+
+          if [ -n "$GIT_RANGE" ]; then
+            git log $GIT_RANGE --pretty=format:"- %s (%h)" --reverse >> CHANGELOG.md
+          else
+            git log --pretty=format:"- %s (%h)" --reverse >> CHANGELOG.md
+          fi
+
+          # Add sections for different types of changes
+          echo "" >> CHANGELOG.md
+          echo "### 🚀 Features" >> CHANGELOG.md
+          git log $GIT_RANGE --grep="feat" --pretty=format:"- %s (%h)" --reverse 2>/dev/null >> CHANGELOG.md || echo "No new features" >> CHANGELOG.md
+
+          echo "" >> CHANGELOG.md
+          echo "### 🐛 Bug Fixes" >> CHANGELOG.md
+          git log $GIT_RANGE --grep="fix" --pretty=format:"- %s (%h)" --reverse 2>/dev/null >> CHANGELOG.md || echo "No bug fixes" >> CHANGELOG.md
+
+          echo "" >> CHANGELOG.md
+          echo "### 💬 Other Changes" >> CHANGELOG.md
+          git log $GIT_RANGE --grep="^(?!feat|fix)" --pretty=format:"- %s (%h)" --reverse 2>/dev/null >> CHANGELOG.md || echo "No other changes" >> CHANGELOG.md
+
+          # Set output
+          CHANGELOG_CONTENT=$(cat CHANGELOG.md)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGELOG.md
+          retention-days: 7
+
+  build-and-push-container:
+    name: Build and Push Container Image
+    runs-on: ubuntu-latest
+    needs: [extract-version, build-and-test]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.extract-version.outputs.version }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.version=${{ needs.extract-version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GO_VERSION=${{ env.GO_VERSION }}
+            GIT_SHA=${{ github.sha }}
+            GIT_VERSION=${{ needs.extract-version.outputs.version }}
+          target: production
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ needs.extract-version.outputs.version }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ needs.extract-version.outputs.version }}
+          path: sbom.spdx.json
+          retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [extract-version, generate-changelog, build-and-test, build-and-push-container]
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Download changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.extract-version.outputs.version }}
+          name: Release ${{ needs.extract-version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: ${{ github.event.inputs.draft || 'false' }}
+          prerelease: ${{ needs.extract-version.outputs.is_prerelease }}
+          files: |
+            artifacts/release-binaries/cortex-linux-amd64
+            artifacts/release-binaries/cortex-linux-arm64
+            artifacts/release-binaries/cortex-darwin-amd64
+            artifacts/release-binaries/cortex-darwin-arm64
+            artifacts/release-binaries/cortex-windows-amd64.exe
+            artifacts/release-binaries/checksums.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest tag for stable releases
+        if: needs.extract-version.outputs.is_prerelease == 'false'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # Create and push latest tag
+          git tag -f latest
+          git push origin latest --force
+
+  security-scan:
+    name: Security Scan Release
+    runs-on: ubuntu-latest
+    needs: [build-and-push-container, extract-version]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    steps:
+      - name: Run Trivy vulnerability scanner on release image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ needs.extract-version.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [extract-version, create-release]
+    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'failure')
+    steps:
+      - name: Notify on success
+        if: needs.create-release.result == 'success'
+        run: |
+          echo "🎉 Release ${{ needs.extract-version.outputs.version }} created successfully!"
+          echo "📦 Container image: ${{ env.IMAGE_NAME }}:${{ needs.extract-version.outputs.version }}"
+          echo "🐙 GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.extract-version.outputs.version }}"
+
+      - name: Notify on failure
+        if: needs.create-release.result == 'failure'
+        run: |
+          echo "❌ Release ${{ needs.extract-version.outputs.version }} failed!"
+          exit 1
+
+  cleanup:
+    name: Cleanup Artifacts
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    if: always()
+    steps:
+      - name: Cleanup temporary artifacts
+        run: |
+          echo "Cleaning up temporary artifacts..."
+          # Artifacts are automatically cleaned up by GitHub Actions retention policies

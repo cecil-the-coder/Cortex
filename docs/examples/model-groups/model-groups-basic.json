@@ -1,0 +1,117 @@
+{
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307"
+      ]
+    },
+    {
+      "name": "openai",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4-turbo-preview",
+        "gpt-4",
+        "gpt-3.5-turbo"
+      ]
+    }
+  ],
+  "ModelGroups": [
+    {
+      "name": "basic-models",
+      "description": "Basic models for general use cases",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "claude-haiku"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-3.5-turbo",
+          "alias": "gpt3-5"
+        }
+      ]
+    },
+    {
+      "name": "advanced-models",
+      "description": "Advanced models for complex tasks",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "claude-sonnet"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-opus-20240229",
+          "alias": "claude-opus"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4-turbo-preview",
+          "alias": "gpt4-turbo"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4",
+          "alias": "gpt4"
+        }
+      ]
+    },
+    {
+      "name": "chat-models",
+      "description": "Models optimized for conversational AI",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "chat-pro"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4-turbo-preview",
+          "alias": "chat-standard"
+        }
+      ]
+    }
+  ],
+  "ClientAPIKeys": [
+    {
+      "apiKey": "sk-basic-client-123456",
+      "allowed_model_groups": ["basic-models"],
+      "description": "Basic client with access to entry-level models only"
+    },
+    {
+      "apiKey": "sk-pro-client-789012",
+      "allowed_model_groups": ["basic-models", "advanced-models"],
+      "description": "Professional client with access to all models"
+    },
+    {
+      "apiKey": "sk-chat-only-345678",
+      "allowed_models": ["chat-pro", "chat-standard"],
+      "description": "Chat-only client with specific model access"
+    },
+    {
+      "apiKey": "sk-haiku-only-901234",
+      "allowed_models": ["claude-haiku"],
+      "description": "Claude Haiku only access for cost optimization"
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openai",
+    "longContext": "anthropic",
+    "longContextThreshold": 100000
+  },
+  "APIKEY": "${ROUTER_API_KEY}",
+  "HOST": "0.0.0.0",
+  "PORT": 8080
+}

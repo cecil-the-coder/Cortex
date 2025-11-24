@@ -1,0 +1,74 @@
+{
+  "admin": {
+    "enabled": true,
+    "listen_address": "127.0.0.1:8081",
+    "tls": {
+      "enabled": false
+    },
+    "auth": {
+      "jwt_secret": "dev-secret-change-in-production",
+      "token_expiry": "24h",
+      "refresh_token_expiry": "168h",
+      "session_expiry": "4h",
+      "bcrypt_cost": 4
+    },
+    "database": {
+      "driver": "sqlite",
+      "dsn": "/tmp/Cortex-dev.db"
+    },
+    "redis": {
+      "enabled": false
+    },
+    "security": {
+      "cors": {
+        "allowed_origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],
+        "allowed_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "allowed_headers": ["Content-Type", "Authorization", "X-API-Key"],
+        "max_age": 86400,
+        "credentials": true
+      },
+      "rate_limiting": {
+        "enabled": false
+      },
+      "audit": {
+        "enabled": false
+      }
+    }
+  },
+  "users": {
+    "default_roles": {
+      "auto_created": "operator"
+    },
+    "password_policy": {
+      "min_length": 6,
+      "require_uppercase": false,
+      "require_lowercase": false,
+      "require_numbers": false,
+      "require_special": false,
+      "max_age_days": 0,
+      "prevent_reuse": 0
+    },
+    "tfa": {
+      "issuer": "Cortex-dev",
+      "backup_codes_count": 10,
+      "backup_code_length": 8
+    }
+  },
+  "api_keys": {
+    "defaults": {
+      "default_role": "viewer",
+      "default_expiry": "168h",
+      "max_expiry": "8760h",
+      "max_keys_per_user": 100
+    },
+    "rotation": {
+      "auto_rotate": false,
+      "warning_days": 7
+    }
+  },
+  "logging": {
+    "level": "debug",
+    "format": "text",
+    "output": "stdout"
+  }
+}

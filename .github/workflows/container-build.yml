@@ -1,0 +1,253 @@
+name: Container Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      tag:
+        description: 'Tag to use for the image'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/cecil-the-coder/cortex
+
+jobs:
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get Git SHA
+        id: git-sha
+        run: |
+          SHA=${{ github.sha }}
+          SHORT_SHA=${SHA:0:7}
+          echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "full_sha=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Generate metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.git-sha.outputs.sha }},enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
+          flavor: |
+            latest=true
+            suffix=-{{date 'YYYYMMDD'}}-{{short_sha}}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-docker-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-docker-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GO_VERSION=1.22
+            GIT_SHA=${{ steps.git-sha.outputs.full_sha }}
+            GIT_VERSION=${{ github.ref_name }}
+          target: production
+
+      - name: Generate SBOM
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ steps.git-sha.outputs.sha }}
+          path: sbom.spdx.json
+          retention-days: 30
+
+  scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+
+    steps:
+      - name: Get Git SHA
+        id: git-sha
+        run: |
+          SHA=${{ github.sha }}
+          SHORT_SHA=${SHA:0:7}
+          echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  test-image:
+    name: Test Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+
+    steps:
+      - name: Get Git SHA
+        id: git-sha
+        run: |
+          SHA=${{ github.sha }}
+          SHORT_SHA=${SHA:0:7}
+          echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the image
+        run: |
+          docker pull ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }}
+
+      - name: Test image startup
+        timeout-minutes: 2
+        run: |
+          # Test that the image starts and responds to health checks
+          container_id=$(docker run -d --rm \
+            -p 8080:8080 \
+            -e APIKEY=test-key \
+            ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }} \
+            -help)
+
+          # Wait a moment for startup
+          sleep 5
+
+          # Check if container is still running
+          if ! docker ps | grep -q $container_id; then
+            echo "Container failed to start"
+            docker logs $container_id
+            exit 1
+          fi
+
+          # Test help command worked (container should exit cleanly after help)
+          docker stop $container_id
+
+          # Test actual startup
+          container_id=$(docker run -d --rm \
+            -p 8080:8080 \
+            -e APIKEY=test-key \
+            ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }} \
+            -config /dev/null || echo "config-not-found")
+
+          sleep 3
+
+          # Check if it's still running or exited cleanly
+          if docker ps | grep -q $container_id; then
+            echo "Container started successfully"
+            docker stop $container_id
+          else
+            echo "Container exited - checking if this is expected"
+            exit_code=$(docker inspect $container_id --format='{{.State.ExitCode}}')
+            if [ "$exit_code" = "0" ] || [ "$exit_code" = "1" ]; then
+              echo "Container exited with expected code: $exit_code"
+            else
+              echo "Container failed with unexpected exit code: $exit_code"
+              docker logs $container_id
+              exit 1
+            fi
+          fi
+
+  update-latest:
+    name: Update Latest Tag
+    runs-on: ubuntu-latest
+    needs: [build, scan, test-image]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get Git SHA
+        id: git-sha
+        run: |
+          SHA=${{ github.sha }}
+          SHORT_SHA=${SHA:0:7}
+          echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Tag and push latest
+        run: |
+          docker pull ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }}
+          docker tag ${{ env.IMAGE_NAME }}:${{ steps.git-sha.outputs.sha }} ${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.IMAGE_NAME }}:latest

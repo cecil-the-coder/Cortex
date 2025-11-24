@@ -1,0 +1,717 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - '**.md'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - '**.md'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  markdown-lint:
+    name: Lint Markdown Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install markdown linting tools
+        run: |
+          npm install -g markdownlint-cli2
+          npm install -g remark-cli
+          npm install -g remark-preset-lint-recommended
+
+      - name: Create markdownlint config
+        run: |
+          cat > .markdownlint.json << 'EOF'
+          {
+            "default": true,
+            "MD013": { "line_length": 150, "code_blocks": false, "tables": false, "headings": false },
+            "MD033": { "allowed_elements": ["details", "summary", "sub", "sup", "kbd", "br", "hr"] },
+            "MD041": false,
+            "MD007": { "indent": 2 },
+            "MD024": { "allow_different_nesting": true },
+            "MD022": false,
+            "MD031": false,
+            "MD032": false,
+            "MD040": false,
+            "MD047": false,
+            "MD029": false
+          }
+          EOF
+
+      - name: Run markdownlint
+        run: |
+          markdownlint-cli2 "**/*.md" "#node_modules"
+
+      - name: Run remark for additional checks
+        run: |
+          remark . --use remark-preset-lint-recommended --frail --quiet
+
+  validate-links:
+    name: Validate Internal and External Links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install link checker
+        run: npm install -g markdown-link-check
+
+      - name: Create link check config
+        run: |
+          cat > .markdownlinkcheck.json << 'EOF'
+          {
+            "ignorePatterns": [
+              {
+                "pattern": "^http://localhost"
+              },
+              {
+                "pattern": "^https://example.com"
+              }
+            ],
+            "replacementPatterns": [
+              {
+                "pattern": "^/docs/",
+                "replacement": "https://github.com/${{ github.repository }}/blob/main/docs/"
+              },
+              {
+                "pattern": "^/",
+                "replacement": "https://github.com/${{ github.repository }}/blob/main/"
+              }
+            ],
+            "httpHeaders": [
+              {
+                "urls": ["https://github.com"],
+                "headers": {
+                  "Accept": "text/html",
+                  "User-Agent": "Mozilla/5.0 (compatible; markdown-link-check)"
+                }
+              }
+            ],
+            "timeout": "20s",
+            "retryOn429": true,
+            "retryCount": 3,
+            "fallbackRetryDelay": "30s",
+            "aliveStatusCodes": [200, 206, 301, 302, 303]
+          }
+          EOF
+
+      - name: Check links in documentation
+        run: |
+          find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | \
+          xargs -I {} markdown-link-check {} --config .markdownlinkcheck.json --verbose
+
+  spell-check:
+    name: Spell Check Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install cspell
+        run: npm install -g cspell
+
+      - name: Create cspell config
+        run: |
+          cat > .cspell.json << 'EOF'
+          {
+            "version": "0.2",
+            "language": "en,en-US",
+            "words": [
+              "LLM",
+              "OAuth",
+              "JWT",
+              "API",
+              "REST",
+              "JSON",
+              "YAML",
+              "CORS",
+              "Cortex",
+              "Anthropic",
+              "OpenAI",
+              "Azure",
+              "OpenRouter",
+              "Gemini",
+              "Claude",
+              "GPT",
+              "HTTP",
+              "HTTPS",
+              "TOTP",
+              "RBAC",
+              "SQL",
+              "GoLang",
+              "Docker",
+              "GitHub",
+              "repo",
+              "repos",
+              "env",
+              "vars",
+              "config",
+              "configs",
+              "endpoint",
+              "endpoints",
+              "middleware",
+              "backend",
+              "frontend",
+              "auth",
+              "apis",
+              "apiary",
+              "apikey",
+              "apikeys",
+              "url",
+              "urls",
+              "uri",
+              "uris",
+              "cli",
+              "cmd",
+              "cmds",
+              "exec",
+              "mkdir",
+              "chmod",
+              "curl",
+              "wget",
+              "git",
+              "npm",
+              "yarn",
+              "pnpm",
+              "build",
+              "deps",
+              "dev",
+              "prod",
+              "staging",
+              "localhost",
+              "hotreload",
+              "hot",
+
+              "Go-specific terms",
+              "goroutine",
+              "gofmt",
+              "go vet",
+              "go mod",
+              "gofmt",
+              "golangci",
+              "ineffassign",
+              "staticcheck",
+              "gosec",
+
+              "Database terms",
+              "mysql",
+              "sqlite",
+              "postgresql",
+              "postgres",
+              "redis",
+
+              "Security terms",
+              "csrf",
+              "xss",
+              "injection",
+              "hashes",
+              "bcrypt",
+              "crypt",
+              "certs",
+              "pem",
+
+              "Technical terms",
+              "jsonb",
+              "unmarshalling",
+              "marshalling",
+              "protobuf",
+              "grpc",
+              "websocket",
+              "websockets",
+              "sse",
+              "prometheus",
+              "grafana",
+              "kubernetes",
+              "k8s",
+
+              "Project-specific terms",
+              "ctx",
+              "req",
+              "res",
+              "cfg",
+              "init",
+              "util",
+              "utils",
+              "pkg",
+              "lib",
+              "libs",
+              "handler",
+              "handlers",
+              "router",
+              "routers",
+              "server",
+              "servers",
+              "client",
+              "clients",
+              "service",
+              "services",
+              "provider",
+              "providers",
+              "model",
+              "models",
+              "user",
+              "users",
+              "token",
+              "tokens",
+              "session",
+              "sessions",
+              "key",
+              "keys",
+              "secret",
+              "secrets",
+              "hash",
+              "hashes",
+              "role",
+              "roles",
+              "permission",
+              "permissions",
+              "group",
+              "groups",
+              "member",
+              "members",
+              "org",
+              "orgs",
+              "team",
+              "teams",
+              "audit",
+              "auditing",
+              "log",
+              "logs",
+              "logger",
+              "loggers",
+              "metrics",
+              "monitoring",
+              "health",
+              "check",
+              "checks",
+              "status",
+              "statuses",
+              "response",
+              "responses",
+              "request",
+              "requests",
+              "payload",
+              "payloads",
+              "data",
+              "dataset",
+              "datasets",
+              "stream",
+              "streams",
+              "streaming",
+              "async",
+              "sync",
+              "concurrent",
+              "parallel",
+              "mutex",
+              "lock",
+              "locks",
+              "unlock",
+              "waitgroup",
+              "channel",
+              "channels",
+              "buffer",
+              "buffers",
+              "cache",
+              "caching",
+              "ttl",
+              "expiry",
+              "expiration",
+              "timeout",
+              "timeouts",
+              "retry",
+              "retries",
+              "backoff",
+              "circuitbreaker",
+              "ratelimit",
+              "throttling",
+              "loadbalancer",
+              "failover",
+              "replica",
+              "replicas",
+              "scaling",
+              "deployment",
+              "deployments",
+              "release",
+              "releases",
+              "version",
+              "versions",
+              "changelog",
+              "migration",
+              "migrations",
+              "schema",
+              "schemas",
+              "index",
+              "indexes",
+              "query",
+              "queries",
+              "select",
+              "insert",
+              "update",
+              "delete",
+              "create",
+              "drop",
+              "alter",
+              "commit",
+              "rollback",
+              "transaction",
+              "transactions",
+              "isolation",
+              "consistency",
+              "atomicity",
+              "durability",
+              "sharding",
+              "partitioning",
+              "replication",
+              "backup",
+              "backups",
+              "restore",
+              "snapshot",
+              "snapshots",
+              "export",
+              "imports",
+              "migration"
+            ],
+            "ignorePaths": [
+              "node_modules/**",
+              ".git/**",
+              "vendor/**",
+              "*.log",
+              "*.tmp",
+              "dist/**",
+              "build/**"
+            ],
+            "ignoreRegExpList": [
+              "/\\b\\w+\\.(go|js|ts|jsx|tsx|html|css|scss|sass|less|json|yaml|yml|xml|sql|sh|bash|zsh|fish|ps1|bat|cmd|py|java|php|rb|rs|swift|kt|scala|clj|hs|ml|fs|fsx|dart|lua|pl|pm|r|R|matlab|sql|md|markdown|txt|csv|tsv|ini|conf|cfg|config|toml|properties|env|lock|sum|mod|work|gradle|pom|xml|sbt|bazel|dockerfile|dockerignore|gitignore|editorconfig|eslint|prettier|stylelint|commitlint|husky|lint-staged|version|license|changelog|readme| contributing|security|conduct|authors|contributors|history|changes|releases|docs|doc|documentation|faq|tutorial|guide|getting-started|installation|configuration|usage|examples|samples|demo|test|tests|spec|specs|benchmark|benchmarks|performance|profile|profiling|debug|debugging|troubleshoot|troubleshooting|issue|issues|bug|bugs|feature|features|enhancement|improvement|refactor|refactoring|cleanup|maintenance|deprecated|deprecation|removal|breaking|compatibility|migration|upgrade|downgrade|patch|hotfix|security|vulnerability|vulnerabilities|cve|cwe\\b/g"
+            ]
+          }
+          EOF
+
+      - name: Run spell check
+        run: |
+          cspell "**/*.md" --config .cspell.json --no-summary --color
+
+  generate-documentation-metrics:
+    name: Generate Documentation Metrics
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate documentation metrics
+        id: metrics
+        run: |
+          # Count total documentation files
+          DOC_FILES=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | wc -l)
+
+          # Calculate total lines of documentation
+          DOC_LINES=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | xargs wc -l | tail -1 | awk '{print $1}')
+
+          # Count words in documentation
+          DOC_WORDS=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | xargs cat | wc -w)
+
+          # Count code blocks
+          CODE_BLOCKS=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | xargs grep -c '```' | awk '{sum += $1} END {print sum/2}')
+
+          # Count images
+          DOC_IMAGES=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" -exec grep -l "!\[" {} \; | wc -l)
+
+          # Count links
+          INTERNAL_LINKS=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" -exec grep -h "\[.*\](\.\|/)" {} \; | wc -l)
+          EXTERNAL_LINKS=$(find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" -exec grep -h "\[.*\](http" {} \; | wc -l)
+
+          # Generate metrics report
+          cat > docs-metrics.json << EOF
+          {
+            "total_files": $DOC_FILES,
+            "total_lines": $DOC_LINES,
+            "total_words": $DOC_WORDS,
+            "code_blocks": $CODE_BLOCKS,
+            "images": $DOC_IMAGES,
+            "internal_links": $INTERNAL_LINKS,
+            "external_links": $EXTERNAL_LINKS,
+            "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          echo "Documentation Metrics:"
+          echo "- Files: $DOC_FILES"
+          echo "- Lines: $DOC_LINES"
+          echo "- Words: $DOC_WORDS"
+          echo "- Code blocks: $CODE_BLOCKS"
+          echo "- Images: $DOC_IMAGES"
+          echo "- Internal links: $INTERNAL_LINKS"
+          echo "- External links: $EXTERNAL_LINKS"
+
+      - name: Upload metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-metrics
+          path: docs-metrics.json
+          retention-days: 30
+
+      - name: Comment PR with metrics (if on PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const metrics = JSON.parse(fs.readFileSync('docs-metrics.json', 'utf8'));
+
+            const comment = `## 📊 Documentation Metrics
+
+            - **📄 Files**: ${metrics.total_files}
+            - **📝 Lines**: ${metrics.total_lines}
+            - **🔤 Words**: ${metrics.total_words}
+            - **💻 Code blocks**: ${metrics.code_blocks}
+            - **🖼️ Images**: ${metrics.images}
+            - **🔗 Internal links**: ${metrics.internal_links}
+            - **🌐 External links**: ${metrics.external_links}
+
+            _Generated on: ${metrics.generated_at}_`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  build-docs-site:
+    name: Build Documentation Site
+    runs-on: ubuntu-latest
+    needs: [markdown-lint, validate-links, spell-check]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install docs builder
+        run: |
+          npm install -g @applitools/docgen
+          npm install -g gitbook-cli
+          npm install -g vuepress
+
+      - name: Generate table of contents
+        run: |
+          # Create TOC for main documentation
+          cat > docs/README.md << 'EOF'
+          # Cortex Documentation
+
+          ## Table of Contents
+
+          ### Getting Started
+          - [Installation Guide](installation.md)
+          - [Quick Start](quickstart.md)
+          - [Configuration](configuration.md)
+
+          ### Core Features
+          - [Authentication System](authentication.md)
+          - [Model Groups](model-groups.md)
+          - [OAuth Integration](oauth-integration.md)
+          - [Hot Reload](hot-reload.md)
+
+          ### API Documentation
+          - [OpenAI Compatible API](openai-api.md)
+          - [Anthropic Compatible API](anthropic-api.md)
+          - [Admin API](admin-api.md)
+
+          ### Advanced Topics
+          - [Security Best Practices](security.md)
+          - [Performance Optimization](performance.md)
+          - [Deployment Guide](deployment.md)
+          - [Troubleshooting](troubleshooting.md)
+
+          ### Phase 3 Features
+          - [Core API Integration](core-api.md)
+          - [Health Monitoring](health-monitoring.md)
+          - [Model Discovery](model-discovery.md)
+
+          ### Development
+          - [Contributing](contributing.md)
+          - [Development Setup](development.md)
+
+          EOF
+
+      - name: Build static documentation site
+        run: |
+          mkdir -p site
+
+          # Copy existing documentation
+          cp -r docs/* site/
+          cp README.md site/
+          cp CHANGELOG.md site/ 2>/dev/null || echo "No CHANGELOG.md found"
+
+          # Generate index page
+          cat > site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Cortex Documentation</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; margin: 0; padding: 20px; max-width: 1200px; margin: 0 auto; }
+              .header { border-bottom: 2px solid #e1e5e9; padding-bottom: 20px; margin-bottom: 30px; }
+              .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+              .card { border: 1px solid #e1e5e9; border-radius: 8px; padding: 20px; }
+              .card h3 { margin-top: 0; color: #0366d6; }
+              .toc ul { list-style: none; padding: 0; }
+              .toc li { margin: 5px 0; }
+              .toc a { text-decoration: none; color: #0366d6; }
+              .toc a:hover { text-decoration: underline; }
+              .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e1e5e9; text-align: center; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>🧠 Cortex Documentation</h1>
+              <p>A high-performance Go-based LLM router with intelligent routing, OAuth authentication, and hot-reload capabilities.</p>
+            </div>
+
+            <div class="grid">
+              <div class="card">
+                <h3>🚀 Getting Started</h3>
+                <div class="toc">
+                  <ul>
+                    <li><a href="README.md">Overview</a></li>
+                    <li><a href="oauth-quickstart.md">OAuth Quick Start</a></li>
+                    <li><a href="model-groups-quick-reference.md">Model Groups Quick Reference</a></li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>🔐 Authentication & Security</h3>
+                <div class="toc">
+                  <ul>
+                    <li><a href="admin-authentication.md">Admin Authentication</a></li>
+                    <li><a href="admin-api-usage.md">Admin API Usage</a></li>
+                    <li><a href="oauth-guide.md">OAuth Guide</a></li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>⚙️ Configuration</h3>
+                <div class="toc">
+                  <ul>
+                    <li><a href="model-groups.md">Model Groups</a></li>
+                    <li><a href="database-integration.md">Database Integration</a></li>
+                    <li><a href="context-aware-routing.md">Context-Aware Routing</a></li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>🚀 Phase 3 Features</h3>
+                <div class="toc">
+                  <ul>
+                    <li><a href="ai-provider-kit-integration.md">Core API Integration</a></li>
+                    <li><a href="health-monitoring-api.md">Health Monitoring</a></li>
+                    <li><a href="model-discovery-api.md">Model Discovery</a></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>Last updated: $(date +%Y-%m-%d) | <a href="https://github.com/${{ github.repository }}">GitHub Repository</a></p>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload documentation site
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-site
+          path: site/
+          retention-days: 7
+
+  deploy-docs:
+    name: Deploy Documentation to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build-docs-site
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download documentation site
+        uses: actions/download-artifact@v4
+        with:
+          name: documentation-site
+          path: site
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  notify-documentation:
+    name: Documentation Notifications
+    runs-on: ubuntu-latest
+    needs: [markdown-lint, validate-links, spell-check, deploy-docs]
+    if: always()
+    steps:
+      - name: Notify on success
+        if: needs.markdown-lint.result == 'success' && needs.validate-links.result == 'success' && needs.spell-check.result == 'success'
+        run: |
+          echo "✅ All documentation checks passed!"
+          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
+            echo "📚 Documentation deployed to GitHub Pages: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          fi
+
+      - name: Notify on failures
+        if: needs.markdown-lint.result == 'failure' || needs.validate-links.result == 'failure' || needs.spell-check.result == 'failure'
+        run: |
+          echo "❌ Documentation validation failed!"
+          if [ "${{ needs.markdown-lint.result }}" = "failure" ]; then echo "- Markdown linting failed"; fi
+          if [ "${{ needs.validate-links.result }}" = "failure" ]; then echo "- Link validation failed"; fi
+          if [ "${{ needs.spell-check.result }}" = "failure" ]; then echo "- Spell check failed"; fi
+          exit 1

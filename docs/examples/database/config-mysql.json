@@ -1,0 +1,75 @@
+{
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022"
+      ]
+    },
+    {
+      "name": "openai",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4o",
+        "gpt-4o-mini"
+      ]
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openai",
+    "longContextThreshold": 100000
+  },
+  "APIKEY": "${ROUTER_API_KEY}",
+  "HOST": "0.0.0.0",
+  "PORT": 8082,
+  "Database": {
+    "enabled": true,
+    "primary": {
+      "type": "mysql",
+      "host": "${DB_HOST:-localhost}",
+      "port": ${DB_PORT:-3306},
+      "database": "${DB_NAME:-go_llm_router}",
+      "username": "${DB_USER:-router_user}",
+      "password": "${DB_PASSWORD}",
+      "mysql_charset": "utf8mb4",
+      "mysql_collation": "utf8mb4_unicode_ci",
+      "mysql_parse_time": true,
+      "max_open_conns": 50,
+      "max_idle_conns": 10,
+      "conn_max_lifetime": "10m",
+      "conn_max_idle_time": "2m",
+      "batch_size": 200,
+      "flush_interval": "3s"
+    },
+    "fallback": {
+      "use_file_on_failure": true,
+      "config_path": "config.json",
+      "retry_delay": "60s",
+      "sync_on_recovery": true
+    },
+    "cache": {
+      "enabled": true,
+      "ttl": "10m",
+      "max_entries": 2000,
+      "cleanup_interval": "5m"
+    }
+  },
+  "ClientAPIKeys": [
+    {
+      "keyId": "production",
+      "apiKey": "${PRODUCTION_API_KEY}",
+      "description": "Production API key",
+      "rateLimit": 10000,
+      "modelAccess": ["*"],
+      "features": ["vision", "tools", "streaming", "knowledge_graph"],
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,249 @@
+{
+  "comment": "Example configuration demonstrating context-aware routing features",
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307",
+        "claude-3-sonnet-20240229"
+      ]
+    },
+    {
+      "name": "openai",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4-turbo-preview",
+        "gpt-4",
+        "gpt-4-32k",
+        "gpt-3.5-turbo",
+        "gpt-4o",
+        "gpt-4o-mini"
+      ]
+    },
+    {
+      "name": "google",
+      "authMethod": "api_key",
+      "APIKEY": "${GOOGLE_API_KEY}",
+      "baseURL": "https://generativelanguage.googleapis.com/v1",
+      "models": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-pro",
+        "gemini-pro-vision"
+      ]
+    },
+    {
+      "name": "mistral",
+      "authMethod": "api_key",
+      "APIKEY": "${MISTRAL_API_KEY}",
+      "baseURL": "https://api.mistral.ai/v1",
+      "models": [
+        "mistral-large",
+        "mixtral-8x7b-instruct",
+        "mistral-7b-instruct"
+      ]
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openai",
+    "think": "anthropic",
+    "longContext": "google",
+    "webSearch": "openai",
+    "vision": "google",
+    "longContextThreshold": 100000
+  },
+  "ModelGroups": {
+    "production": {
+      "description": "Production models with optimal routing for different context sizes",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "claude-sonnet",
+          "maxContextTokens": 200000
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4-turbo-preview",
+          "alias": "gpt4-turbo",
+          "maxContextTokens": 128000
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-opus-20240229",
+          "alias": "claude-opus",
+          "maxContextTokens": 200000
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4o",
+          "alias": "gpt4o",
+          "maxContextTokens": 128000
+        }
+      ]
+    },
+    "mixed-context": {
+      "description": "Models with varying context capabilities for flexible routing",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "large-context",
+          "maxContextTokens": 200000
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-3.5-turbo",
+          "alias": "medium-context",
+          "maxContextTokens": 16385
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4",
+          "alias": "small-context",
+          "maxContextTokens": 8192
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "fast-context",
+          "maxContextTokens": 200000
+        }
+      ]
+    },
+    "mega-context": {
+      "description": "Models with very large context windows for document analysis",
+      "models": [
+        {
+          "provider": "google",
+          "model": "gemini-1.5-pro",
+          "alias": "gemini-mega",
+          "maxContextTokens": 1000000
+        },
+        {
+          "provider": "google",
+          "model": "gemini-1.5-flash",
+          "alias": "gemini-flash",
+          "maxContextTokens": 1000000
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "claude-mega",
+          "maxContextTokens": 200000
+        }
+      ]
+    },
+    "cost-optimized": {
+      "description": "Cost-effective models for high-volume requests",
+      "models": [
+        {
+          "provider": "openai",
+          "model": "gpt-3.5-turbo",
+          "alias": "gpt35",
+          "maxContextTokens": 16385
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "claude-haiku",
+          "maxContextTokens": 200000
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "alias": "gpt4o-mini",
+          "maxContextTokens": 128000
+        },
+        {
+          "provider": "mistral",
+          "model": "mistral-7b-instruct",
+          "alias": "mistral-small",
+          "maxContextTokens": 8192
+        }
+      ]
+    },
+    "specialized-tasks": {
+      "description": "Models optimized for specific task types",
+      "models": [
+        {
+          "provider": "openai",
+          "model": "gpt-4-32k",
+          "alias": "gpt4-long",
+          "maxContextTokens": 32768
+        },
+        {
+          "provider": "mistral",
+          "model": "mixtral-8x7b-instruct",
+          "alias": "mixtral-moe",
+          "maxContextTokens": 32768
+        },
+        {
+          "provider": "mistral",
+          "model": "mistral-large",
+          "alias": "mistral-large",
+          "maxContextTokens": 32768
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-opus-20240229",
+          "alias": "claude-reasoning",
+          "maxContextTokens": 200000
+        }
+      ]
+    }
+  },
+  "ClientAPIKeys": {
+    "production-app": {
+      "apiKey": "prod-api-key-placeholder",
+      "description": "Production application with full access",
+      "modelGroups": [
+        "production",
+        "mixed-context",
+        "mega-context"
+      ],
+      "enabled": true,
+      "rateLimit": 1000
+    },
+    "cost-optimised-service": {
+      "apiKey": "cost-api-key-placeholder",
+      "description": "Cost-optimized service for high volume",
+      "modelGroups": [
+        "cost-optimized"
+      ],
+      "enabled": true,
+      "rateLimit": 5000
+    },
+    "specialized-worker": {
+      "apiKey": "worker-api-key-placeholder",
+      "description": "Specialized worker for complex tasks",
+      "modelGroups": [
+        "specialized-tasks",
+        "mega-context"
+      ],
+      "enabled": true,
+      "rateLimit": 200
+    },
+    "development-key": {
+      "apiKey": "dev-api-key-placeholder",
+      "description": "Development and testing key",
+      "modelGroups": [
+        "mixed-context",
+        "cost-optimized"
+      ],
+      "enabled": true,
+      "rateLimit": 100
+    }
+  },
+  "HOST": "0.0.0.0",
+  "PORT": 8080,
+  "APIKEY": "${ROUTER_API_KEY}"
+}

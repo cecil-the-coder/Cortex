@@ -1,0 +1,263 @@
+{
+  "Providers": [
+    {
+      "name": "anthropic",
+      "authMethod": "api_key",
+      "APIKEY": "${ANTHROPIC_API_KEY}",
+      "baseURL": "https://api.anthropic.com/v1",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307",
+        "claude-2.1",
+        "claude-2.0"
+      ]
+    },
+    {
+      "name": "openai",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
+      "models": [
+        "gpt-4-turbo-preview",
+        "gpt-4",
+        "gpt-3.5-turbo",
+        "gpt-4-32k"
+      ]
+    },
+    {
+      "name": "google",
+      "authMethod": "api_key",
+      "APIKEY": "${GOOGLE_API_KEY}",
+      "baseURL": "https://generativelanguage.googleapis.com/v1",
+      "models": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-pro"
+      ]
+    },
+    {
+      "name": "openrouter",
+      "authMethod": "api_key",
+      "APIKEY": "${OPENROUTER_API_KEY}",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "models": [
+        "anthropic/claude-3.5-sonnet",
+        "openai/gpt-4-turbo",
+        "google/gemini-pro",
+        "meta-llama/llama-3-70b-instruct"
+      ]
+    }
+  ],
+  "ModelGroups": [
+    {
+      "name": "claude-family",
+      "description": "All Claude models from Anthropic with friendly aliases",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "claude-latest"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-opus-20240229",
+          "alias": "claude-opus"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "claude-haiku"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-2.1",
+          "alias": "claude-2"
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-2.0",
+          "alias": "claude-legacy"
+        }
+      ]
+    },
+    {
+      "name": "gpt-family",
+      "description": "All GPT models from OpenAI with simplified names",
+      "models": [
+        {
+          "provider": "openai",
+          "model": "gpt-4-turbo-preview",
+          "alias": "gpt4-turbo"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4",
+          "alias": "gpt4"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-3.5-turbo",
+          "alias": "gpt35"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4-32k",
+          "alias": "gpt4-32k"
+        }
+      ]
+    },
+    {
+      "name": "gemini-family",
+      "description": "Google Gemini models",
+      "models": [
+        {
+          "provider": "google",
+          "model": "gemini-1.5-pro",
+          "alias": "gemini-pro"
+        },
+        {
+          "provider": "google",
+          "model": "gemini-1.5-flash",
+          "alias": "gemini-flash"
+        },
+        {
+          "provider": "google",
+          "model": "gemini-pro",
+          "alias": "gemini-legacy"
+        }
+      ]
+    },
+    {
+      "name": "best-of-breed",
+      "description": "Top models from each provider for comparison",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet-20241022",
+          "alias": "best-claude"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4-turbo-preview",
+          "alias": "best-gpt"
+        },
+        {
+          "provider": "google",
+          "model": "gemini-1.5-pro",
+          "alias": "best-gemini"
+        },
+        {
+          "provider": "openrouter",
+          "model": "anthropic/claude-3.5-sonnet",
+          "alias": "best-openrouter"
+        }
+      ]
+    },
+    {
+      "name": "cost-optimized",
+      "description": "Most cost-effective models from each provider",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-haiku-20240307",
+          "alias": "fast-claude"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-3.5-turbo",
+          "alias": "fast-gpt"
+        },
+        {
+          "provider": "google",
+          "model": "gemini-1.5-flash",
+          "alias": "fast-gemini"
+        }
+      ]
+    },
+    {
+      "name": "enterprise-models",
+      "description": "Enterprise-grade models with robust features",
+      "models": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-opus-20240229",
+          "alias": "enterprise-claude"
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4-32k",
+          "alias": "enterprise-gpt"
+        },
+        {
+          "provider": "google",
+          "model": "gemini-1.5-pro",
+          "alias": "enterprise-gemini"
+        }
+      ]
+    },
+    {
+      "name": "openrouter-special",
+      "description": "Specialty models available through OpenRouter",
+      "models": [
+        {
+          "provider": "openrouter",
+          "model": "anthropic/claude-3.5-sonnet",
+          "alias": "or-claude"
+        },
+        {
+          "provider": "openrouter",
+          "model": "openai/gpt-4-turbo",
+          "alias": "or-gpt"
+        },
+        {
+          "provider": "openrouter",
+          "model": "google/gemini-pro",
+          "alias": "or-gemini"
+        },
+        {
+          "provider": "openrouter",
+          "model": "meta-llama/llama-3-70b-instruct",
+          "alias": "or-llama"
+        }
+      ]
+    }
+  ],
+  "ClientAPIKeys": [
+    {
+      "apiKey": "sk-developer-123",
+      "allowed_model_groups": ["best-of-breed", "cost-optimized"],
+      "description": "Developer access to top models and cost-optimized options"
+    },
+    {
+      "apiKey": "sk-enterprise-456",
+      "allowed_model_groups": ["claude-family", "gpt-family", "gemini-family", "enterprise-models"],
+      "description": "Enterprise access to all major model families"
+    },
+    {
+      "apiKey": "sk-researcher-789",
+      "allowed_model_groups": ["best-of-breed", "openrouter-special", "enterprise-models"],
+      "description": "Research access to premium and specialty models"
+    },
+    {
+      "apiKey": "sk-budget-012",
+      "allowed_models": ["fast-claude", "fast-gpt", "fast-gemini", "claude-haiku", "gpt35", "gemini-flash"],
+      "description": "Budget-conscious access to fast models only"
+    },
+    {
+      "apiKey": "sk-claude-expert-345",
+      "allowed_model_groups": ["claude-family"],
+      "description": "Claude specialist with full Claude family access"
+    }
+  ],
+  "Router": {
+    "default": "anthropic",
+    "background": "openai",
+    "longContext": "anthropic",
+    "think": "anthropic",
+    "longContextThreshold": 100000
+  },
+  "APIKEY": "${ROUTER_API_KEY}",
+  "HOST": "0.0.0.0",
+  "PORT": 8080
+}

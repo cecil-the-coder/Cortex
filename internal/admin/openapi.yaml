@@ -1,0 +1,2088 @@
+openapi: 3.0.3
+info:
+  title: Go LLM Router Admin API
+  description: |
+    Comprehensive admin API for Go LLM Router system management.
+
+    This API provides complete administrative control over:
+    - Provider management and monitoring
+    - User and API key management with RBAC
+    - Model discovery and routing
+    - Configuration management
+    - System monitoring and analytics
+    - Real-time WebSocket updates
+    - Authentication and authorization management
+
+    ## Authentication & Authorization
+
+    The API supports multiple authentication methods and comprehensive role-based access control (RBAC):
+
+    ### Authentication Methods
+    - **Bearer Token**: `Authorization: Bearer <admin-api-key>`
+    - **API Key Header**: `X-API-Key: <admin-api-key>`
+    - **Query Parameter**: `api_key=<admin-api-key>`
+    - **Session Cookie**: For web interface authentication
+    - **JWT Token**: For stateless authentication with expiration
+
+    ### Role-Based Access Control (RBAC)
+    Users are assigned roles that determine their permissions:
+
+    **Available Roles:**
+    - `super_admin`: Full access to all resources and settings
+    - `admin`: Full access to most resources, except system-critical settings
+    - `operator`: Read/write access to providers and models, no user management
+    - `viewer`: Read-only access to all resources
+    - `support`: Access to logs, monitoring, and diagnostic tools
+
+    ### Two-Factor Authentication (TFA)
+    - **TOTP**: Time-based One-Time Password (Google Authenticator, Authy)
+    - **Backup Codes**: Recovery codes for TFA
+    - **Enforcement**: Optional per-role or mandatory for sensitive operations
+
+    ### Rate Limiting & Security
+    - Rate limiting based on user roles and IP addresses
+    - Configurable security headers (CORS, CSP, HSTS)
+    - Rate limit headers included in responses
+    - Attempt monitoring and automatic lockout protection
+
+    ## Rate Limiting
+
+    API requests are rate-limited based on configuration and user roles:
+    - **Super Admin**: 1000 requests/minute
+    - **Admin**: 500 requests/minute
+    - **Operator**: 200 requests/minute
+    - **Viewer**: 100 requests/minute
+    - Rate limit headers are included in responses
+    - Exceeded limits return HTTP 429 status
+
+    ## Pagination
+
+    List endpoints support pagination:
+    - `page`: Page number (default: 1)
+    - `per_page`: Items per page (default: 50, max: 1000)
+    - Response includes pagination metadata
+
+    ## Filtering and Sorting
+
+    Most list endpoints support:
+    - `q`: Search query
+    - `sort_by`: Sort field
+    - `sort_desc=true`: Sort in descending order
+    - `status`: Filter by status
+    - `date_from/date_to`: Date range filters
+    - `filter_*`: Custom filters
+
+    ## Bulk Operations
+
+    Supported resources provide bulk operation endpoints:
+    - `POST /resource/bulk` with JSON payload containing action and items
+    - Returns detailed results for each operation
+
+    ## WebSocket
+
+    Real-time updates available at `/v1/ws:
+    - Connect with same authentication
+    - Subscribe to event types
+    - Receive live updates for providers, models, metrics, and user activities
+
+    ## Auditing
+
+    All admin actions are logged with:
+    - User identification
+    - Timestamp and IP address
+    - Action performed and resource affected
+    - Success/failure status
+  version: 1.0.0
+  contact:
+    name: Go LLM Router Admin
+    email: admin@gollmrouter.local
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.gollmrouter.local
+    description: Production server
+
+paths:
+  # Health check
+  /v1/health:
+    get:
+      tags: [System]
+      summary: Check API health
+      description: Simple health check endpoint
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # Authentication Endpoints
+  /v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate user
+      description: Authenticate a user with username and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  example: "secure_password"
+                remember_me:
+                  type: boolean
+                  default: false
+                tfa_code:
+                  type: string
+                  description: TOTP code if TFA is enabled
+                  example: "123456"
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+                  session_token:
+                    type: string
+                    description: Session token for web interface
+                  Jwt_token:
+                    type: string
+                    description: JWT for API authentication
+                  expires_in:
+                    type: integer
+                    description: Token expiration time in seconds
+                  requires_tfa:
+                    type: boolean
+                    description: Whether TFA setup is required
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout user
+      description: Invalidate user session and tokens
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Logged out successfully"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh JWT token
+      description: Refresh an expired JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh token
+      responses:
+        '200':
+          description: Token refreshed successfuly
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  jwt_token:
+                    type: string
+                  expires_in:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/tfa/setup:
+    post:
+      tags: [Authentication]
+      summary: Setup TFA for user
+      description: Initialize TOTP-based two-factor authentication
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  description: Current password for verification
+      responses:
+        '200':
+          description: TFA setup initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  qr_code:
+                    type: string
+                    description: Base64 encoded QR code image
+                  secret:
+                    type: string
+                    description: TOTP secret for manual entry
+                  backup_codes:
+                    type: array
+                    items:
+                      type: string
+                    description: Backup recovery codes
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/tfa/verify:
+    post:
+      tags: [Authentication]
+      summary: Verify and enable TFA
+      description: Verify TOTP code and enable TFA for user
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: TOTP verification code
+      responses:
+        '200':
+          description: TFA enabled successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/tfa/disable:
+    post:
+      tags: [Authentication]
+      summary: Disable TFA for user
+      description: Disable two-factor authentication
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password:
+                  type: string
+                  description: Current password
+                code:
+                  type: string
+                  description: Current TOTP code or backup code
+      responses:
+        '200':
+          description: TFA disabled successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # User Management
+  /v1/users:
+    get:
+      tags: [Users]
+      summary: List all users
+      description: Retrieve a paginated list of all users
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 1000
+        - name: q
+          in: query
+          description: Search query for username or email
+          schema:
+            type: string
+        - name: role
+          in: query
+          description: Filter by user role
+          schema:
+            type: string
+            enum: [super_admin, admin, operator, viewer, support]
+        - name: status
+          in: query
+          description: Filter by user status
+          schema:
+            type: string
+            enum: [active, inactive, locked, pending]
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsersResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+    post:
+      tags: [Users]
+      summary: Create new user
+      description: Create a new user account with specified role
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+                  temporary_password:
+                    type: string
+                    description: Temporary password for first login
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /v1/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user details
+      description: Retrieve detailed information about a specific user
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags: [Users]
+      summary: Update user
+      description: Update user information and settings
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [Users]
+      summary: Delete user
+      description: Delete a user account (cannot be undone)
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/users/{id}/reset-password:
+    post:
+      tags: [Users]
+      summary: Reset user password
+      description: Reset a user's password and send temporary credentials
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  temporary_password:
+                    type: string
+                    description: New temporary password
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/users/{id}/lock:
+    post:
+      tags: [Users]
+      summary: Lock user account
+      description: Lock a user account to prevent access
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User locked successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /v1/users/{id}/unlock:
+    post:
+      tags: [Users]
+      summary: Unlock user account
+      description: Unlock a user account to restore access
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User unlocked successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  # Provider Management
+  /v1/providers:
+    get:
+      tags: [Providers]
+      summary: List all providers
+      description: Retrieve a paginated list of all configured providers
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 1000
+        - name: q
+          in: query
+          description: Search query for provider name or description
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by provider status
+          schema:
+            type: string
+            enum: [active, inactive, error, unknown]
+        - name: sort_by
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [name, created_at, updated_at, status]
+        - name: sort_desc
+          in: query
+          description: Sort in descending order
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProvidersResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+    post:
+      tags: [Providers]
+      summary: Create new provider
+      description: Add a new provider configuration
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProviderRequest'
+      responses:
+        '201':
+          description: Provider created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  provider:
+                    $ref: '#/components/schemas/Provider'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /v1/providers/{id}:
+    get:
+      tags: [Providers]
+      summary: Get provider details
+      description: Retrieve detailed information about a specific provider
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  provider:
+                    $ref: '#/components/schemas/Provider'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags: [Providers]
+      summary: Update provider
+      description: Update provider configuration
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProviderRequest'
+      responses:
+        '200':
+          description: Provider updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  provider:
+                    $ref: '#/components/schemas/Provider'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [Providers]
+      summary: Delete provider
+      description: Remove a provider configuration
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/providers/{id}/health:
+    post:
+      tags: [Providers]
+      summary: Trigger health check
+      description: Manually trigger a health check for a provider
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Health check triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  health_status:
+                    $ref: '#/components/schemas/ProviderHealth'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Model Management
+  /v1/models:
+    get:
+      tags: [Models]
+      summary: List all models
+      description: Retrieve a paginated list of all available models
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 1000
+        - name: provider
+          in: query
+          description: Filter by provider
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Search query for model name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedModelsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # User Management (API Keys) - Updated for RBAC
+  /v1/users/api-keys:
+    get:
+      tags: [Users, API Keys]
+      summary: List API keys
+      description: Retrieve a paginated list of API keys managed by current user or all keys (admin)
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 1000
+        - name: owner_id
+          in: query
+          description: Filter by owner user ID (admin only)
+          schema:
+            type: string
+        - name: model_groups
+          in: query
+          description: Filter by model groups
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAPIKeysResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+    post:
+      tags: [Users, API Keys]
+      summary: Create API key
+      description: Create a new API key for user access with specified permissions
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAPIKeyRequest'
+      responses:
+        '201':
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  api_key:
+                    $ref: '#/components/schemas/APIKey'
+                  full_key:
+                    type: string
+                    description: Full API key (only shown once)
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /v1/users/api-keys/{id}:
+    get:
+      tags: [Users, API Keys]
+      summary: Get API key details
+      description: Retrieve detailed information about a specific API key
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API key details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  api_key:
+                    $ref: '#/components/schemas/APIKey'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags: [Users, API Keys]
+      summary: Update API key
+      description: Update API key settings and permissions
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAPIKeyRequest'
+      responses:
+        '200':
+          description: API key updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  api_key:
+                    $ref: '#/components/schemas/APIKey'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [Users, API Keys]
+      summary: Delete API key
+      description: Delete an API key
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API key deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/users/api-keys/{id}/usage:
+    get:
+      tags: [Users, API Keys]
+      summary: Get API key usage
+      description: Retrieve usage statistics for a specific API key
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          description: Time period for statistics
+          schema:
+            type: string
+            enum: [today, week, month, year, all]
+            default: month
+      responses:
+        '200':
+          description: API key usage statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  usage:
+                    $ref: '#/components/schemas/APIKeyUsage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/users/api-keys/validate:
+    post:
+      tags: [Users, API Keys]
+      summary: Validate API key
+      description: Validate an API key and check its permissions
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key:
+                  type: string
+                  description: API key to validate
+                model:
+                  type: string
+                  description: Optional model to check access for
+      responses:
+        '200':
+          description: API key validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  validation:
+                    $ref: '#/components/schemas/APIKeyValidation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # System Management
+  /v1/system/info:
+    get:
+      tags: [System]
+      summary: Get system information
+      description: Retrieve system information and configuration
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: System information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInfo'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/system/status:
+    get:
+      tags: [System]
+      summary: Get system status
+      description: Retrieve current system status and health
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/system/metrics:
+    get:
+      tags: [System]
+      summary: Get system metrics
+      description: Retrieve detailed system metrics and performance data
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: period
+          in: query
+          description: Time period for metrics
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 24h
+        - name: metric_type
+          in: query
+          description: Type of metrics to retrieve
+          schema:
+            type: string
+            enum: [performance, usage, errors, providers, models, users]
+            default: performance
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemMetrics'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoint
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: session_token
+      description: Session cookie for web interface
+
+  # Schemas
+  schemas:
+    # Base schemas
+    APIResponse:
+      type: object
+      required: [success, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          description: Response data (varies by endpoint)
+        paging:
+          $ref: '#/components/schemas/PagingInfo'
+        meta:
+          $ref: '#/components/schemas/MetaInfo'
+        timestamp:
+          type: string
+          format: date-time
+          description: Response timestamp in RFC3339 format
+          example: "2024-01-01T12:00:00Z"
+
+    APIError:
+      type: object
+      required: [error, code, message, timestamp]
+      properties:
+        error:
+          type: string
+          enum: ["true"]
+          example: "true"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "validation_error"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Request validation failed"
+        details:
+          type: object
+          description: Additional error details
+          properties:
+            field:
+              type: string
+              example: "username"
+            reason:
+              type: string
+              example: "Username is required"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-01T12:00:00Z"
+
+    PagingInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 50
+        total:
+          type: integer
+          example: 125
+        total_pages:
+          type: integer
+          example: 3
+        has_next:
+          type: boolean
+          example: true
+        has_prev:
+          type: boolean
+          example: false
+
+    MetaInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+        processing_time_ms:
+          type: integer
+          description: Request processing time in milliseconds
+          example: 45
+        request_id:
+          type: string
+          description: Unique request identifier
+          example: "req_123456789"
+        rate_limit:
+          type: object
+          properties:
+            limit:
+              type: integer
+              example: 500
+            remaining:
+              type: integer
+              example: 492
+            reset_time:
+              type: string
+              format: date-time
+              example: "2024-01-01T12:01:00Z"
+
+    # Authentication schemas
+    User:
+      type: object
+      required: [id, username, email, role, created_at]
+      properties:
+        id:
+          type: string
+          example: "user_123"
+        username:
+          type: string
+          example: "admin"
+        email:
+          type: string
+          format: email
+          example: "admin@example.com"
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        full_name:
+          type: string
+          example: "System Administrator"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+        tfa_enabled:
+          type: boolean
+          example: true
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Explicit permissions (in addition to role permissions)
+        metadata:
+          type: object
+          description: Additional user metadata
+
+    UserRole:
+      type: string
+      enum: [super_admin, admin, operator, viewer, support]
+      description: User role determines access permissions
+      example: "admin"
+
+    UserStatus:
+      type: string
+      enum: [active, inactive, locked, pending]
+      description: User account status
+      example: "active"
+
+    CreateUserRequest:
+      type: object
+      required: [username, email, role]
+      properties:
+        username:
+          type: string
+          description: Unique username
+          example: "john_doe"
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "john@example.com"
+        role:
+          $ref: '#/components/schemas/UserRole'
+        full_name:
+          type: string
+          description: User's full name
+          example: "John Doe"
+        password:
+          type: string
+          description: Initial password (will be generated if not provided)
+        force_password_change:
+          type: boolean
+          description: Require password change on first login
+          default: true
+        tfa_enabled:
+          type: boolean
+          description: Enable TFA for this user
+          default: false
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Additional permissions beyond role defaults
+        metadata:
+          type: object
+          description: Additional user metadata
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        full_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        tfa_enabled:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+
+    # API Key schemas with RBAC support
+    APIKey:
+      type: object
+      required: [id, owner_id, permissions, created_at]
+      properties:
+        id:
+          type: string
+          example: "api_key_123"
+        owner_id:
+          type: string
+          description: ID of the user who owns this key
+          example: "user_123"
+        description:
+          type: string
+          example: "Production API key for main application"
+        key_preview:
+          type: string
+          description: Masked version of the key for display
+          example: "sk-****************5678"
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Permissions granted to this key
+          example: ["models.read", "providers.read"]
+        model_groups:
+          type: array
+          items:
+            type: string
+          description: Model groups this key can access
+        rate_limit:
+          type: integer
+          description: Requests per minute limit (0 = unlimited)
+          example: 1000
+        enabled:
+          type: boolean
+          example: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Optional expiration time
+        last_used:
+          type: string
+          format: date-time
+          description: Last time this key was used
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        usage_count:
+          type: integer
+          description: Total number of times this key has been used
+          example: 15420
+
+    CreateAPIKeyRequest:
+      type: object
+      required: [description, permissions]
+      properties:
+        description:
+          type: string
+          example: "API key for production application"
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Permissions to grant (required)
+          example: ["models.read", "providers.read"]
+        model_groups:
+          type: array
+          items:
+            type: string
+          description: Model groups this key can access
+          example: ["production", "vision"]
+        rate_limit:
+          type: integer
+          description: Requests per minute limit
+          example: 500
+        enabled:
+          type: boolean
+          default: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Optional expiration time
+        owner_id:
+          type: string
+          description: Owner user ID (admin only)
+        api_key:
+          type: string
+          description: Custom API key (will be generated if not provided)
+
+    UpdateAPIKeyRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        model_groups:
+          type: array
+          items:
+            type: string
+        rate_limit:
+          type: integer
+        enabled:
+          type: boolean
+        expires_at:
+          type: string
+          format: date-time
+
+    APIKeyUsage:
+      type: object
+      properties:
+        requests_today:
+          type: integer
+          example: 150
+        requests_this_month:
+          type: integer
+          example: 3240
+        total_requests:
+          type: integer
+          example: 15320
+        last_used:
+          type: string
+          format: date-time
+        rate_limit_current:
+          type: integer
+          description: Current rate limit setting
+          example: 1000
+        average_requests_per_day:
+          type: integer
+          example: 108
+        requests_by_model:
+          type: object
+          description: Usage breakdown by model
+          additionalProperties:
+            type: integer
+        requests_by_status:
+          type: object
+          description: Usage breakdown by response status
+          properties:
+            success:
+              type: integer
+            error:
+              type: integer
+            timeout:
+              type: integer
+
+    APIKeyValidation:
+      type: object
+      properties:
+        api_key:
+          type: string
+          description: Masked API key
+          example: "sk-************5678"
+        format_valid:
+          type: boolean
+          description: Whether the key format is valid
+        exists:
+          type: boolean
+          description: Whether the key exists in the system
+        access_valid:
+          type: boolean
+          description: Whether the key is currently valid (enabled, not expired)
+        key_id:
+          type: string
+          description: Key identifier if valid
+        owner_id:
+          type: string
+          description: Owner user ID if valid
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Permissions granted to this key
+        model_access:
+          type: object
+          description: Model access information for requested model
+          properties:
+            has_access:
+              type: boolean
+            resolved_model:
+              type: string
+            provider:
+              type: string
+            model_group:
+              type: string
+
+    # Provider schemas
+    Provider:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "anthropic_prod"
+        name:
+          type: string
+          example: "Anthropic Production"
+        provider_type:
+          type: string
+          example: "anthropic"
+        auth_method:
+          type: string
+          enum: [api_key, oauth, basic, custom]
+        status:
+          type: string
+          enum: [active, inactive, error, unknown]
+        health:
+          $ref: '#/components/schemas/ProviderHealth'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        config:
+          type: object
+          description: Provider-specific configuration (sanitized for display)
+        metadata:
+          type: object
+          description: Additional provider metadata
+
+    CreateProviderRequest:
+      type: object
+      required: [name, provider_type, auth_method]
+      properties:
+        name:
+          type: string
+          example: "Anthropic Production"
+        provider_type:
+          type: string
+          example: "anthropic"
+        auth_method:
+          type: string
+          enum: [api_key, oauth, basic, custom]
+        config:
+          type: object
+          description: Provider configuration
+          properties:
+            api_key:
+              type: string
+              description: API key for authentication
+            base_url:
+              type: string
+              description: Custom base URL
+            timeout:
+              type: integer
+              description: Timeout in seconds
+            max_retries:
+              type: integer
+              description: Maximum retry attempts
+
+    UpdateProviderRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        auth_method:
+          type: string
+          enum: [api_key, oauth, basic, custom]
+        config:
+          type: object
+        enabled:
+          type: boolean
+
+    ProviderHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        last_check:
+          type: string
+          format: date-time
+        response_time_ms:
+          type: integer
+          example: 145
+        error_message:
+          type: string
+          description: Error message if unhealthy
+        uptime_percentage:
+          type: number
+          format: float
+          example: 99.8
+
+    # Model schemas
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "claude-3-5-sonnet-20241022"
+        name:
+          type: string
+          example: "Claude 3.5 Sonnet"
+        provider_id:
+          type: string
+          example: "anthropic_prod"
+        provider_type:
+          type: string
+          example: "anthropic"
+        model_type:
+          type: string
+          enum: [text, vision, audio, multimodal]
+        capabilities:
+          type: array
+          items:
+            type: string
+          example: ["text", "vision"]
+        context_window:
+          type: integer
+          example: 200000
+        pricing:
+          type: object
+          properties:
+            input_per_1k:
+              type: number
+              format: float
+              example: 0.003
+            output_per_1k:
+              type: number
+              format: float
+              example: 0.015
+        status:
+          type: string
+          enum: [available, unavailable, deprecated]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # System schemas
+    SystemInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.2.3"
+        build_info:
+          type: object
+          properties:
+            commit:
+              type: string
+              example: "abc123def"
+            build_date:
+              type: string
+              format: date-time
+            go_version:
+              type: string
+              example: "go1.21.0"
+        uptime_seconds:
+          type: integer
+          example: 86400
+        hostname:
+          type: string
+          example: "router-prod-01"
+        architecture:
+          type: string
+          example: "linux/amd64"
+        authentication:
+          type: object
+          properties:
+            enabled_methods:
+              type: array
+              items:
+                type: string
+              example: ["bearer", "api_key", "session"]
+            rbac_enabled:
+              type: boolean
+              example: true
+            tfa_enabled:
+              type: boolean
+              example: true
+            rate_limiting_enabled:
+              type: boolean
+              example: true
+
+    SystemStatus:
+      type: object
+      properties:
+        overall_status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        components:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ComponentStatus'
+        active_users:
+          type: integer
+          example: 25
+        active_api_keys:
+          type: integer
+          example: 150
+        total_requests_today:
+          type: integer
+          example: 125000
+        error_rate_percentage:
+          type: number
+          format: float
+          example: 0.02
+
+    ComponentStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        last_check:
+          type: string
+          format: date-time
+        details:
+          type: object
+
+    SystemMetrics:
+      type: object
+      properties:
+        performance:
+          type: object
+          properties:
+            avg_response_time_ms:
+              type: number
+              format: float
+              example: 245.5
+            request_rate_per_second:
+              type: number
+              format: float
+              example: 15.2
+            error_rate_percentage:
+              type: number
+              format: float
+              example: 0.05
+        usage:
+          type: object
+          properties:
+            total_requests:
+              type: integer
+              example: 1250000
+            unique_api_keys:
+              type: integer
+              example: 450
+            data_processed_mb:
+              type: integer
+              example: 2048
+        by_provider:
+          type: object
+          description: Metrics broken down by provider
+          additionalProperties:
+            type: object
+        by_model:
+          type: object
+          description: Metrics broken down by model
+          additionalProperties:
+            type: object
+        by_user:
+          type: object
+          description: Metrics broken down by user
+          additionalProperties:
+            type: object
+
+    # Response schemas
+    PaginatedUsersResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [users, count]
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User'
+                count:
+                  type: integer
+                  example: 42
+
+    PaginatedProvidersResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [providers, count]
+              properties:
+                providers:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Provider'
+                count:
+                  type: integer
+                  example: 8
+
+    PaginatedModelsResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [models, count]
+              properties:
+                models:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Model'
+                count:
+                  type: integer
+                  example: 25
+
+    PaginatedAPIKeysResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [api_keys, count]
+              properties:
+                api_keys:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/APIKey'
+                count:
+                  type: integer
+                  example: 156
+
+  # Common responses
+  responses:
+    UnauthorizedError:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          example:
+            error: "true"
+            code: "authentication_error"
+            message: "Invalid or missing authentication credentials"
+            timestamp: "2024-01-01T12:00:00Z"
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          example:
+            error: "true"
+            code: "authorization_error"
+            message: "You don't have permission to perform this action"
+            timestamp: "2024-01-01T12:00:00Z"
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          example:
+            error: "true"
+            code: "validation_error"
+            message: "Request validation failed"
+            details:
+              field: "username"
+              reason: "Username must be between 3 and 50 characters"
+            timestamp: "2024-01-01T12:00:00Z"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          example:
+            error: "true"
+            code: "not_found_error"
+            message: "The requested resource was not found"
+            timestamp: "2024-01-01T12:00:00Z"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          example:
+            error: "true"
+            code: "rate_limit_exceeded"
+            message: "Too many requests. Try again later."
+            timestamp: "2024-01-01T12:00:00Z"
+      headers:
+        X-RateLimit-Limit:
+          description: Request limit per time window
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Time when rate limit window resets
+          schema:
+            type: string
+            format: date-time
+
+    ConflictError:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          example:
+            error: "true"
+            code: "conflict_error"
+            message: "Resource already exists"
+            timestamp: "2024-01-01T12:00:00Z"
+
+tags:
+  - name: Authentication
+    description: Authentication and authorization management
+  - name: Users
+    description: User account management
+  - name: API Keys
+    description: API key management
+  - name: Providers
+    description: Provider configuration and management
+  - name: Models
+    description: Model information and management
+  - name: System
+    description: System information and monitoring

@@ -1,0 +1,142 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run security scan weekly on Monday at 2 AM UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  vulnerability-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install Gosec
+        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
+      - name: Run Gosec Security Scanner
+        run: gosec -no-fail -fmt sarif -out results.sarif ./...
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+      - name: Run nancy (dependency vulnerability scanner)
+        run: |
+          go list -json -m all | docker run --rm -i sonatypecommunity/nancy:latest sleuth
+
+  dependency-update:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Check for Go module updates
+        run: |
+          # Get list of available updates
+          go list -u -m -json all | grep -B2 '"GoMod"' | grep '"Path"' | cut -d'"' -f4 > modules.txt
+
+          # Create branch for updates
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git checkout -b chore/dependency-updates-${{ steps.date.outputs.date }}
+
+          # Update dependencies
+          go get -u ./...
+          go mod tidy
+
+          # Check if there are any changes
+          if git diff --quiet go.mod go.sum; then
+            echo "No dependency updates available"
+            exit 0
+          fi
+
+          # Commit changes
+          git add go.mod go.sum
+          git commit -m "chore: update Go dependencies (${{ steps.date.outputs.date }})"
+
+          # Push branch
+          git push origin chore/dependency-updates-${{ steps.date.outputs.date }}
+
+          # Create pull request
+          gh pr create \
+            --title "chore: update Go dependencies (${{ steps.date.outputs.date }})" \
+            --body "Automated dependency update for ${{ steps.date.outputs.date }}
+
+          This PR updates Go modules to their latest versions while maintaining compatibility.
+
+          Please review the changes and ensure all tests pass before merging." \
+            --head chore/dependency-updates-${{ steps.date.outputs.date }} \
+            --base main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  license-check:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      - name: Checklicenses
+        run: |
+          go-licenses check ./...
+          go-licenses csv ./... > licenses.csv
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: licenses.csv
+          retention-days: 30
+
+      - name: Check for restricted licenses
+        run: |
+          if grep -i "gpl\|agpl\|lgpl" licenses.csv; then
+            echo "::warning::Found GPL/AGPL/LGPL licensed dependencies. Please review compliance."
+          fi

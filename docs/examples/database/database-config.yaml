@@ -1,0 +1,222 @@
+# Cortex Database Configuration Example
+# This file demonstrates the database configuration options
+
+# Main server configuration (kept for backward compatibility)
+server:
+  host: "0.0.0.0"
+  port: 8080
+  api_key: "${ROUTER_API_KEY}"
+
+# Database configuration
+database:
+  # Enable database persistence
+  enabled: true
+
+  # Primary database connection
+  primary:
+    # Database type: "sqlite" or "mysql"
+    type: "sqlite"  # Change to "mysql" for production
+
+    # SQLite configuration (for development/small deployments)
+    sqlite_path: "./data/router.db"
+    sqlite_wal_mode: true  # Enable WAL mode for better concurrency
+    sqlite_cache_size: 2000  # Cache size in pages
+
+    # MySQL configuration (for production)
+    # host: "localhost"
+    # port: 3306
+    # database: "llm_router"
+    # username: "router_user"
+    # password: "${DB_PASSWORD}"
+    # mysql_charset: "utf8mb4"
+    # mysql_collation: "utf8mb4_unicode_ci"
+    # mysql_parse_time: true
+
+    # Connection pooling
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: "1h"
+    conn_max_idle_time: "30m"
+
+    # Performance tuning
+    batch_size: 100
+    flush_interval: "5s"
+
+  # Read-only replica (optional)
+  read_only:
+    # Only needed for high-availability setups
+    # type: "mysql"
+    # host: "read-replica.example.com"
+    # port: 3306
+    # database: "llm_router"
+    # username: "router_readonly"
+    # password: "${DB_READONLY_PASSWORD}"
+    # max_open_conns: 10
+    # max_idle_conns: 2
+
+  # Cache configuration
+  cache:
+    enabled: true
+    # Cache type: "memory" or "redis"
+    type: "memory"
+    ttl: "10m"
+    max_size: 10000
+
+    # Redis configuration (if type is "redis")
+    # redis:
+    #   address: "localhost:6379"
+    #   password: "${REDIS_PASSWORD}"
+    #   database: 0
+    #   pool_size: 10
+
+  # Fallback configuration
+  fallback:
+    use_file_on_failure: true
+    config_path: "./config.json"
+    retry_delay: "30s"
+
+  # Hot reload configuration
+  hot_reload:
+    enabled: true
+    poll_interval: "5s"
+    watch_events:
+      - "provider"
+      - "model_group"
+      - "api_key"
+      - "router_config"
+
+# Legacy provider configuration (used for initial import/migration)
+providers:
+  - name: "anthropic"
+    auth_method: "api_key"
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com/v1"
+    models:
+      - "claude-3-5-sonnet-20241022"
+      - "claude-3-opus-20240229"
+      - "claude-3-haiku-20240307"
+    use_core_api: true
+    core_api_features:
+      - "thinking_mode"
+      - "top_k_sampling"
+      - "system_prompts"
+      - "prompt_caching"
+
+  - name: "openai"
+    auth_method: "api_key"
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    models:
+      - "gpt-4-turbo-preview"
+      - "gpt-4"
+      - "gpt-3.5-turbo"
+    use_core_api: true
+    core_api_features:
+      - "json_mode"
+      - "parallel_tools"
+      - "reproducible_results"
+      - "top_p_sampling"
+
+# Router configuration
+router:
+  default: "anthropic"
+  background: "openai"
+  think: "anthropic"
+  long_context: "anthropic"
+  web_search: "openai"
+  vision: "openai"
+  long_context_threshold: 100000
+
+# Model groups (will be migrated to database)
+model_groups:
+  production:
+    description: "Production-ready models with high reliability"
+    models:
+      - provider: "anthropic"
+        model: "claude-3-5-sonnet-20241022"
+        alias: "claude-sonnet-4.5"
+      - provider: "openai"
+        model: "gpt-4-turbo-preview"
+        alias: "gpt-turbo"
+
+  vision-capable:
+    description: "Models that support image processing"
+    models:
+      - provider: "anthropic"
+        model: "claude-3-5-sonnet-20241022"
+      - provider: "openai"
+        model: "gpt-4-vision-preview"
+
+# Client API keys (will be migrated to database)
+client_api_keys:
+  production:
+    api_key: "${CLIENT_API_KEY_PROD}"
+    description: "Production client API key"
+    model_groups:
+      - "production"
+      - "vision-capable"
+    enabled: true
+    rate_limit: 1000
+
+  development:
+    api_key: "${CLIENT_API_KEY_DEV}"
+    description: "Development client API key"
+    model_groups: []
+    enabled: true
+    rate_limit: 100
+
+# Metrics and monitoring configuration
+metrics:
+  # Enable metrics collection
+  enabled: true
+
+  # Metrics retention period
+  retention:
+    raw_metrics: "30d"      # Keep raw request metrics for 30 days
+    hourly_metrics: "90d"    # Keep hourly aggregates for 90 days
+    daily_metrics: "365d"    # Keep daily aggregates for 1 year
+    health_metrics: "7d"     # Keep health checks for 7 days
+
+  # Export configuration
+  export:
+    # Enable exporting metrics to external systems
+    prometheus:
+      enabled: false
+      port: 9090
+      path: "/metrics"
+
+    # Export to file (useful for backup/archival)
+    file:
+      enabled: false
+      path: "./metrics-export"
+      format: "json"  # "json" or "csv"
+      schedule: "0 2 * * *"  # Daily at 2 AM
+
+# Logging configuration
+logging:
+  level: "info"  # "debug", "info", "warn", "error"
+  format: "json" # "json" or "text"
+
+  # Database operation logging
+  database:
+    log_queries: false  # Enable to log all database queries
+    slow_query_threshold: "100ms"
+    log_connections: true
+
+# Health check configuration
+health:
+  enabled: true
+  endpoint: "/health"
+
+  # Database health checks
+  database:
+    enabled: true
+    check_interval: "30s"
+    timeout: "5s"
+
+  # Provider health checks
+  providers:
+    enabled: true
+    check_interval: "60s"
+    timeout: "10s"
+    failure_threshold: 3  # Number of consecutive failures before marking as unhealthy
