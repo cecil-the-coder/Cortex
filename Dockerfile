@@ -34,7 +34,8 @@ ENV GOARCH=${TARGETARCH:-amd64}
 ENV GO_VERSION=${GO_VERSION}
 
 # Build the application
-RUN go build -a -installsuffix cgo \
+RUN ls -la ./cmd/router && \
+    go build -a -installsuffix cgo \
     -ldflags="-w -s \
       -X 'main.Version=${GIT_VERSION:-dev}' \
       -X 'main.GitSHA=${GIT_SHA:-unknown}' \
