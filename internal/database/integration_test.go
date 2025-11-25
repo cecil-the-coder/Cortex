@@ -171,6 +171,7 @@ func testCRUDWorkflow(t *testing.T, db Database) {
 
 	// List models with filters
 	providerID := provider.ID
+	enabled = true // Fix: should be true since we created the model as enabled
 	modelFilter := &ModelFilter{
 		ProviderID: &providerID,
 		ModelName:  "integration",
