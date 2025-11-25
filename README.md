@@ -1,6 +1,7 @@
 # Cortex
 
-A high-performance Go-based LLM router that provides unified access to multiple LLM providers with intelligent routing, OAuth authentication, and hot-reload capabilities.
+A high-performance Go-based LLM router that provides unified access to multiple LLM providers with intelligent routing,
+OAuth authentication, and hot-reload capabilities.
 
 ## Features
 
@@ -250,7 +251,8 @@ curl -X POST \
         {
           "type": "image_url",
           "image_url": {
-            "url": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/"
+            "url": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ" +
+                  "EBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/"
           }
         }
       ]
@@ -363,6 +365,7 @@ curl -H "x-api-key: YOUR_ROUTER_API_KEY" \
 | `models` | array | Yes | List of models in the group |
 
 Each model in a group can have:
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `provider` | string | Yes | Provider name |
@@ -378,9 +381,9 @@ Each model in a group can have:
 | `allowed_model_groups` | array | No | Model group permissions |
 | `description` | string | No | Key description for tracking |
 
-## OAuth Authentication
+## OAuth Provider Authentication
 
-### Authentication Methods
+### Provider Authentication Methods
 
 1. **API Key Only** (`api_key`): Traditional static API keys
 2. **OAuth Only** (`oauth`): OAuth 2.0 with automatic refresh
@@ -423,7 +426,7 @@ For detailed OAuth setup, see [Authentication Guide](docs/authentication.md).
 
 The admin API provides enterprise-grade authentication and authorization features for managing the router and its configuration.
 
-### Authentication Methods
+### Admin Authentication Methods
 
 #### 1. JWT Token Authentication
 Stateless JSON Web Token authentication with automatic refresh:
@@ -687,7 +690,8 @@ For comprehensive authentication documentation, see:
 
 ## Model Groups
 
-Model Groups provide enterprise-grade access control by allowing you to organize models into logical groups and restrict client API keys to specific models or groups.
+Model Groups provide enterprise-grade access control by allowing you to organize models into logical groups and
+restrict client API keys to specific models or groups.
 
 ### Key Features
 
@@ -1001,7 +1005,7 @@ The [examples/](examples/) directory will contain comprehensive examples for:
 - **[Admin API Usage](./docs/admin-api-usage.md)** - Administrative operations and management
 - **[AI Provider Kit Integration](./docs/ai-provider-kit-integration.md)** - Core API integration details
 
-### Configuration Examples
+### Additional Examples
 📁 **[examples/](./docs/examples/)** - Comprehensive configuration examples organized by use case
 
 #### Key Example Categories

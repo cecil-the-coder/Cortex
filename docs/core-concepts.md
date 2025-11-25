@@ -1,6 +1,7 @@
 # Core Concepts
 
-Cortex provides intelligent routing capabilities that automatically optimize model selection based on request characteristics, provider health, and performance metrics.
+Cortex provides intelligent routing capabilities that automatically optimize model selection based on request characteristics,
+provider health, and performance metrics.
 
 ## Intelligent Routing System
 
@@ -94,7 +95,7 @@ Automatic detection and routing of image/video content to vision-capable models:
 
 Real-time monitoring of AI provider health with automated failover and alerting.
 
-### Features
+### Health Monitoring Features
 - **Automatic Health Checks**: Configurable intervals and timeouts
 - **Performance Metrics**: Response times, success rates, error tracking
 - **Alerting System**: Webhook notifications for status changes
@@ -132,7 +133,7 @@ curl -X POST -H "x-api-key: YOUR_ROUTER_API_KEY" \
 
 Automatic detection and organization of models across providers with comprehensive metadata.
 
-### Features
+### Model Discovery Features
 - **Model Registry**: Centralized catalog of all available models
 - **Capability Detection**: Automatic identification of model capabilities
 - **Performance Metrics**: Historical performance data and trends

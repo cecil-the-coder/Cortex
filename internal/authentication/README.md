@@ -1,6 +1,7 @@
 # Authentication System for Cortex
 
-This package provides a comprehensive enterprise-grade authentication system for the Cortex admin API, supporting multiple authentication methods, role-based access control (RBAC), security features, and audit logging.
+This package provides a comprehensive enterprise-grade authentication system for the Cortex admin API, supporting multiple authentication methods,
+role-based access control (RBAC), security features, and audit logging.
 
 ## Features
 

@@ -45,6 +45,7 @@ config-*.json
 *.log
 logs/
 log/
+workflow_logs/
 
 # Database files
 *.db

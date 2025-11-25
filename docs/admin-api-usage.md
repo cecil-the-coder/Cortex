@@ -1,6 +1,8 @@
 # Admin API Usage Guide
 
-This guide provides comprehensive documentation for using the admin API features of the Cortex. The admin API allows you to manage users, API keys, model groups, access control, and monitor usage through REST endpoints with comprehensive authentication and authorization.
+This guide provides comprehensive documentation for using the admin API features of the Cortex. The admin API allows you to manage
+users, API keys, model groups, access control, and monitor usage through REST endpoints with comprehensive authentication
+and authorization.
 
 ## Table of Contents
 
@@ -1756,7 +1758,7 @@ curl -v -H "Authorization: Bearer $ADMIN_KEY" \
 
 ## Advanced Usage
 
-### Rate Limiting
+### Custom Rate Limiting Configuration
 
 Implement custom rate limiting per API key:
 

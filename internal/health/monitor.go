@@ -162,6 +162,11 @@ func (hm *HealthMonitor) monitorLoop() {
 	ticker := time.NewTicker(hm.checkInterval)
 	defer ticker.Stop()
 
+	// Get a local copy of the stop channel to avoid race conditions
+	hm.mu.RLock()
+	stopChan := hm.stopChan
+	hm.mu.RUnlock()
+
 	// Perform initial check
 	hm.performHealthChecks()
 
@@ -169,7 +174,7 @@ func (hm *HealthMonitor) monitorLoop() {
 		select {
 		case <-ticker.C:
 			hm.performHealthChecks()
-		case <-hm.stopChan:
+		case <-stopChan:
 			return
 		}
 	}
@@ -215,8 +220,8 @@ func (hm *HealthMonitor) checkProviderHealth(name string, provider types.HealthC
 		return
 	}
 
-	// Store old status for callback comparison
-	oldStatus := *status
+	// Store old status for callback comparison - make deep copies to avoid race conditions
+	oldStatusCopy := *status
 
 	// Update health status
 	status.LastChecked = time.Now()
@@ -262,8 +267,10 @@ func (hm *HealthMonitor) checkProviderHealth(name string, provider types.HealthC
 	}
 
 	// Trigger status change callbacks if status changed
-	if hm.statusChanged(&oldStatus, status) {
-		hm.triggerStatusChangeCallbacks(name, &oldStatus, status)
+	// Make copies to avoid race conditions when callbacks run in separate goroutines
+	newStatusCopy := *status
+	if hm.statusChanged(&oldStatusCopy, &newStatusCopy) {
+		hm.triggerStatusChangeCallbacks(name, &oldStatusCopy, &newStatusCopy)
 	}
 }
 

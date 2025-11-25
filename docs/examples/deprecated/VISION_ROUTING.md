@@ -1,10 +1,12 @@
 # Vision Routing Configuration Guide
 
-This guide demonstrates how to configure and use the vision routing capabilities of the Cortex to automatically route requests containing images to vision-capable models.
+This guide demonstrates how to configure and use the vision routing capabilities of the Cortex to automatically route requests
+containing images to vision-capable models.
 
 ## Overview
 
-Vision routing automatically detects when requests contain image content and routes them to a designated vision provider, ensuring that image processing requests are handled by models that support vision capabilities.
+Vision routing automatically detects when requests contain image content and routes them to a designated vision provider,
+ensuring that image processing requests are handled by models that support vision capabilities.
 
 ## Key Features
 
@@ -449,4 +451,5 @@ if registry.SupportsVision(requestedModel) {
 }
 ```
 
-This comprehensive vision routing system ensures your applications can seamlessly handle both text and vision requests with automatic, intelligent routing to the most appropriate models.
+This comprehensive vision routing system ensures your applications can seamlessly handle both text and vision requests with automatic,
+intelligent routing to the most appropriate models.

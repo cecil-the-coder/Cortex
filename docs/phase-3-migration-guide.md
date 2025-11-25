@@ -2,7 +2,8 @@
 
 ## Overview
 
-This guide provides comprehensive information for migrating existing Cortex installations to the Core API implementation (AI Provider Kit integration). The Core API introduces standardized interfaces, health monitoring, model discovery, and enhanced capabilities while maintaining full backward compatibility.
+This guide provides comprehensive information for migrating existing Cortex installations to the Core API implementation (AI Provider Kit integration).
+The Core API introduces standardized interfaces, health monitoring, model discovery, and enhanced capabilities while maintaining full backward compatibility.
 
 ## Migration Benefits
 
@@ -845,7 +846,7 @@ For enterprise migration support:
 4. **Performance Tuning**: Optimization for your specific use case
 5. **Training**: Team training on Core API features
 
-Contact: enterprise-support@your-org.com
+Contact: [enterprise-support@your-org.com](mailto:enterprise-support@your-org.com)
 
 ---
 
@@ -858,4 +859,5 @@ Core API migration provides significant benefits while maintaining backward comp
 3. **Monitor performance and adjust** configurations as needed
 4. **Leverage new capabilities** for improved reliability and functionality
 
-The migration process is designed to be straightforward with minimal risk, and the rollback procedures ensure safe deployment in production environments.
+The migration process is designed to be straightforward with minimal risk, and the rollback procedures ensure safe deployment
+in production environments.

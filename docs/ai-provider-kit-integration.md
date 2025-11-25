@@ -4,7 +4,8 @@ This document provides comprehensive information about the Core API implementati
 
 ## Overview
 
-The ai-provider-kit integration enables Cortex to leverage a standardized API for interacting with multiple AI providers through a unified interface. The Core API provides standardized access patterns, enhanced error handling, and improved performance.
+The ai-provider-kit integration enables Cortex to leverage a standardized API for interacting with multiple AI providers through a unified interface.
+The Core API provides standardized access patterns, enhanced error handling, and improved performance.
 
 ## Architecture
 
@@ -135,7 +136,7 @@ type StandardResponse struct {
 
 ## Health Monitoring
 
-### Features
+### Health Monitoring Features
 
 - **Automatic Health Checks**: Periodic health verification of all providers
 - **Failure Tracking**: Consecutive failure counting and alerting
@@ -180,7 +181,7 @@ type ProviderHealthStatus struct {
 
 ## Model Discovery
 
-### Features
+### Discovery Service Features
 
 - **Automatic Detection**: Discover available models from each provider
 - **Capability Scanning**: Identify supported features (streaming, tool calling, etc.)
@@ -451,7 +452,7 @@ The Core API implementation maintains full backward compatibility:
 
 ## Best Practices
 
-### Configuration
+### Configuration Best Practices
 
 1. **Enable Health Monitoring**: Always enable for production deployments
 2. **Use OAuth**: Prefer OAuth over API keys for better security
@@ -562,6 +563,7 @@ type DiscoveryService interface {
 
 ## Conclusion
 
-The AI Provider Kit Core API integration provides a robust, scalable, and maintainable foundation for AI provider interactions. It offers significant improvements in performance, reliability, and maintainability while maintaining full backward compatibility.
+The AI Provider Kit Core API integration provides a robust, scalable, and maintainable foundation for AI provider interactions.
+It offers significant improvements in performance, reliability, and maintainability while maintaining full backward compatibility.
 
 For questions, issues, or contributions, please refer to the project documentation and issue tracker.

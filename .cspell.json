@@ -11,7 +11,9 @@
     "RBAC",
     "nosniff",
     "hsts",
+    "HSTS",
     "sslmode",
+    "Blocklisting",
 
     // Programming & Technical
     "kwargs",
