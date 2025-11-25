@@ -69,10 +69,11 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
-          args: --timeout=5m
+          version: 'v1.59.1'
+          args: --timeout=10m --verbose
+          install-mode: 'binary'
 
       - name: Run gofmt check
         run: |
