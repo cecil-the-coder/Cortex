@@ -227,7 +227,7 @@ func InitializeMigrations(m *Migrator) {
 				"router_config",
 				"api_key_model_group_access",
 				"client_api_keys",
-				"model_group_members",
+				"group_members",
 				"model_groups",
 				"models",
 				"providers",
@@ -353,7 +353,7 @@ const (
 	`
 
 	createModelGroupMembersTableSQL = `
-		CREATE TABLE model_group_members (
+		CREATE TABLE group_members (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			group_id INTEGER NOT NULL,
 			provider_id INTEGER NOT NULL,
