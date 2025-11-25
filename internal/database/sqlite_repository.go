@@ -357,7 +357,7 @@ func (s *SQLiteDatabase) GetAggregatedMetrics(ctx context.Context, query *Aggreg
 	var aggregated []*AggregatedMetrics
 	for rows.Next() {
 		var agg AggregatedMetrics
-		var timeBucket string
+		var timeBucket sql.NullString
 		var count, tokens int64
 		var cost, latency float64
 
@@ -366,7 +366,10 @@ func (s *SQLiteDatabase) GetAggregatedMetrics(ctx context.Context, query *Aggreg
 			return nil, fmt.Errorf("failed to scan aggregated metrics: %w", err)
 		}
 
-		agg.Labels = map[string]string{"time_bucket": timeBucket}
+		agg.Labels = make(map[string]string)
+		if timeBucket.Valid {
+			agg.Labels["time_bucket"] = timeBucket.String
+		}
 		agg.Values = map[string]interface{}{
 			"count":   count,
 			"tokens":  tokens,
