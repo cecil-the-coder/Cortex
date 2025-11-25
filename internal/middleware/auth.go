@@ -220,5 +220,6 @@ func sendUnauthorized(w http.ResponseWriter, message string) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// If encoding fails, we can't do much more than log it
 		// In a production system, you might want to log this error
+		return
 	}
 }

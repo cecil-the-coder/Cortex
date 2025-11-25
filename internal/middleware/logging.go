@@ -154,12 +154,14 @@ func (l *Logger) rotate() error {
 		newName := fmt.Sprintf("%s.%d", baseFilename, i+1)
 		if err := os.Rename(oldName, newName); err != nil {
 			// Ignore errors - files might not exist, continue with rotation
+			continue
 		}
 	}
 
 	// Rotate current file to .1
 	if err := os.Rename(baseFilename, fmt.Sprintf("%s.1", baseFilename)); err != nil {
 		// If rename fails, the file might not exist or be locked
+		return err
 	}
 
 	// Open new file
@@ -214,6 +216,7 @@ func LoggingMiddleware(logger *Logger) func(http.Handler) http.Handler {
 			)
 			if _, err := logger.Write([]byte(logEntry + "\n")); err != nil {
 				// Ignore write errors for logging middleware to avoid breaking the flow
+				return
 			}
 
 			// Call next handler
@@ -231,6 +234,7 @@ func LoggingMiddleware(logger *Logger) func(http.Handler) http.Handler {
 			)
 			if _, err := logger.Write([]byte(logEntry + "\n")); err != nil {
 				// Ignore write errors for logging middleware to avoid breaking the flow
+				return
 			}
 		})
 	}
@@ -252,12 +256,14 @@ func RecoveryMiddleware(logger *Logger) func(http.Handler) http.Handler {
 					)
 					if _, err := logger.Write([]byte(logEntry)); err != nil {
 						// Ignore write errors during panic recovery
+						return
 					}
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusInternalServerError)
 					if _, err := w.Write([]byte(`{"type":"internal_error","message":"Internal server error"}`)); err != nil {
 						// If we can't write the error response, there's not much we can do
+						return
 					}
 				}
 			}()
