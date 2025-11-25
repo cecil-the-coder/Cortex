@@ -70,7 +70,12 @@ jobs:
 
       - name: Install dependency update tools
         run: |
-          go install github.com/chainguard-dev/go-mod-upgrade@latest
+          # Install go-mod-upgrade with proper error handling
+          if ! go install github.com/chainguard-dev/go-mod-upgrade@latest 2>/dev/null; then
+            echo "Failed to install chainguard-dev/go-mod-upgrade, trying alternative..."
+            # Try the oligot version as fallback (already installed below)
+            go install github.com/oligot/go-mod-upgrade@latest
+          fi
           go install github.com/oligot/go-mod-upgrade@latest
           go install golang.org/x/vuln/cmd/govulncheck@latest
 
