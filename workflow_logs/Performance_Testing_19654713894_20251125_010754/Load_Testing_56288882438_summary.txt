@@ -1,0 +1,14 @@
+Job Summary
+===========
+Job Name: Load Testing
+Job ID: 56288882438
+Status: completed
+Conclusion: failure
+Started: 2025-11-25 01:07:58
+Completed: 2025-11-25 01:09:02
+URL: https://github.com/cecil-the-coder/Cortex/actions/runs/19654713894/job/56288882438
+
+Failed Steps:
+=============
+- Initialize containers (Step 2)
+  Duration: 1m1s

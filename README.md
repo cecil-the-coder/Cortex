@@ -410,7 +410,7 @@ export GEMINI_ACCESS_TOKEN="your-access-token"
 export GEMINI_REFRESH_TOKEN="your-refresh-token"
 
 # Start router with OAuth
-./cortex --config examples/oauth-hybrid-config.json
+./cortex --config config.json
 
 # Check OAuth status
 curl -H "x-api-key: $ROUTER_API_KEY" \
@@ -628,7 +628,7 @@ Comprehensive audit trail for security events:
 #### 2. Manual Setup
 ```bash
 # Copy configuration template
-cp config-with-admin-auth.json config.json
+# Create your config.json based on the documentation examples
 
 # Set environment variables
 export AUTH_JWT_SECRET="your-secure-secret"
@@ -641,12 +641,11 @@ export ADMIN_DEFAULT_PASSWORD="secure-password"
 
 #### 3. Docker Setup
 ```bash
-# Using Docker Compose
-docker-compose -f docker-compose-with-auth.yml up -d
+# Using Docker Compose (create your docker-compose.yml)
+docker-compose up -d
 
 # Environment variables for initial admin
 export ADMIN_PASSWORD=your-secure-password
-docker-compose -f docker-compose-with-auth.yml up -d
 ```
 
 ### Python Examples
@@ -654,8 +653,8 @@ docker-compose -f docker-compose-with-auth.yml up -d
 # Install requirements
 pip install requests
 
-# Use the AdminAPIClient
-from examples.admin_api_python import AdminAPIClient
+# Use the AdminAPIClient (examples will be available soon)
+# from examples.admin_api_python import AdminAPIClient
 
 # JWT Authentication
 client = AdminAPIClient()
@@ -671,14 +670,14 @@ users = client.list_users()
 
 ### Shell Examples
 ```bash
-# JWT authentication
-./examples/admin-api-examples.sh localhost:8080 admin password
+# JWT authentication (example scripts will be available soon)
+# ./examples/admin-api-examples.sh localhost:8080 admin password
 
-# API key authentication
-ADMIN_API_KEY=sk-admin-12345 ./examples/admin-api-examples.sh localhost:8080
+# API key authentication (example scripts will be available soon)
+# ADMIN_API_KEY=sk-admin-12345 ./examples/admin-api-examples.sh localhost:8080
 
-# Skip TFA setup
-SKIP_TFA=true ./examples/admin-api-examples.sh localhost:8080 admin password
+# Skip TFA setup (example scripts will be available soon)
+# SKIP_TFA=true ./examples/admin-api-examples.sh localhost:8080 admin password
 ```
 
 For comprehensive authentication documentation, see:
@@ -969,36 +968,29 @@ if provider.UseCoreAPI() {
 
 ## Examples
 
-See the [examples/](examples/) directory for:
+The [examples/](examples/) directory will contain comprehensive examples for:
 
 ### Authentication Examples
-- [Admin API Shell Examples](examples/admin-api-examples.sh) - Complete authentication workflows in bash
-- [Admin API Python Examples](examples/admin-api-python.py) - Python client with comprehensive auth support
-- [Authentication Configuration](config-with-admin-auth.json) - Production-ready auth configuration
-- [Development Configuration](config-dev-auth.json) - Development auth settings
+- Admin API Shell Examples - Complete authentication workflows in bash
+- Admin API Python Examples - Python client with comprehensive auth support
+- Authentication Configuration - Production-ready auth configuration
+- Development Configuration - Development auth settings
 
 ### Configuration Examples
-- [Docker Compose with Auth](docker-compose-with-auth.yml) - Complete Docker setup with authentication
-- [Environment Variables](.env.auth.template) - Environment configuration template
-- [Database Schema](init-db.sql) - PostgreSQL schema for authentication
-- [Setup Script](setup-auth.sh) - Interactive authentication setup
-- [Redis Configuration](redis.conf) - Redis settings for sessions and rate limiting
+- Docker Compose with Auth - Complete Docker setup with authentication
+- Environment Variables - Environment configuration template
+- Database Schema - PostgreSQL schema for authentication
+- Setup Script - Interactive authentication setup
+- Redis Configuration - Redis settings for sessions and rate limiting
 
 ### Phase 3 Examples
-- [Core API Configuration](examples/core-api-config.json) - Complete Phase 3 setup
-- [Core API Usage](examples/core-api-usage.go) - Comprehensive implementation example
+- Core API Configuration - Complete Phase 3 setup
+- Core API Usage - Comprehensive implementation example
+
+*Note: Example files are being prepared and will be available soon. For now, refer to the documentation guides for implementation details.*
 
 ### Legacy Examples
-- [Vision Routing Configuration](examples/vision-routing-config.json) - Complete vision routing setup
-- [Vision Usage Examples](examples/vision-usage.go) - Vision routing implementation
-- [Model Groups - Basic Setup](examples/model-groups-basic.json)
-- [Model Groups - Multi-Provider](examples/model-groups-multi-provider.json)
-- [Model Groups - Enterprise](examples/model-groups-enterprise.json)
-- [Model Groups - Migration](examples/model-groups-migration.json)
-- [OAuth Hybrid Configuration](examples/oauth-hybrid-config.json)
-- [API Key Only Configuration](examples/api-config.json)
-- [Multi-Tenant Setup](examples/multi-tenant-config.json)
-- [Load Balancing](examples/load-balance-config.json)
+*Example configurations for legacy features will be added to the examples/ directory soon.*
 
 ## 📚 Documentation
 
@@ -1113,4 +1105,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ **Hot-reload support**: Update groups and permissions without restart
 - ✅ **Production-ready examples**: Enterprise and migration configurations
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+Detailed release notes will be available in CHANGELOG.md.

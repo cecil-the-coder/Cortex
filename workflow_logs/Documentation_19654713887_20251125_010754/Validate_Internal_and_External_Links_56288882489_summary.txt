@@ -1,0 +1,14 @@
+Job Summary
+===========
+Job Name: Validate Internal and External Links
+Job ID: 56288882489
+Status: completed
+Conclusion: failure
+Started: 2025-11-25 01:07:59
+Completed: 2025-11-25 01:08:11
+URL: https://github.com/cecil-the-coder/Cortex/actions/runs/19654713887/job/56288882489
+
+Failed Steps:
+=============
+- Check links in documentation (Step 6)
+  Duration: 2s

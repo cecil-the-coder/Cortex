@@ -1,0 +1,184 @@
+{
+  "version": "0.2",
+  "language": "en,en-US",
+  "words": [
+    // Authentication & Security
+    "TOTP",
+    "oauth",
+    "OAuth",
+    "jwt",
+    "JWT",
+    "RBAC",
+    "nosniff",
+    "hsts",
+    "sslmode",
+
+    // Programming & Technical
+    "kwargs",
+    "elif",
+    "staticmethod",
+    "hasattr",
+    "rstrip",
+    "getpass",
+    "omitempty",
+    "Retryable",
+    "APIKEY",
+
+    // Companies & Products
+    "openrouter",
+    "OPENROUTER",
+    "Gemini",
+    "Anthropic",
+    "OpenAI",
+    "Mistral",
+    "Cerebras",
+    "Deepseek",
+    "Ollama",
+    "Mixtral",
+    "tiktoken",
+    "pkoukk",
+    "benchmem",
+
+    // Base64 encoded strings (should be ignored)
+    "XVCJ",
+    "JBSWY",
+    "DPEHPK",
+    "AAAANS",
+    "AAAAEAAAAB",
+
+    // Commands
+    "pkill",
+    "pgrep",
+
+    // File names & paths
+    "Cortex",
+    "cortex",
+    "config",
+    "json",
+
+    // Go/Golang specific
+    "golang",
+    "Go's",
+    "struct",
+    "func",
+    "var",
+    "const",
+    "type",
+    "interface",
+    "package",
+    "import",
+    "return",
+    "defer",
+    "go",
+    "chan",
+    "select",
+    "range",
+    "make",
+    "new",
+    "nil",
+    "true",
+    "false",
+    "iota",
+    "Println",
+    "Errorf",
+    "Subrouter",
+    "modcache",
+
+    // API/HTTP terms
+    "api",
+    "API",
+    "endpoint",
+    "endpoints",
+    "request",
+    "requests",
+    "response",
+    "responses",
+    "http",
+    "HTTP",
+    "https",
+    "HTTPS",
+    "url",
+    "URL",
+    "uri",
+    "URI",
+    "json",
+    "JSON",
+    "xml",
+    "XML",
+    "yaml",
+    "YAML",
+    "csv",
+    "CSV",
+
+    // Database
+    "sql",
+    "SQL",
+    "nosql",
+    "NoSQL",
+    "mysql",
+    "MySQL",
+    "postgres",
+    "PostgreSQL",
+    "sqlite",
+    "SQLite",
+    "redis",
+    "Redis",
+
+    // Cloud/DevOps
+    "kubernetes",
+    "Kubernetes",
+    "k8s",
+    "docker",
+    "Docker",
+    "CI",
+    "CD",
+    "terraform",
+    "Terraform",
+    "ansible",
+    "Ansible",
+
+    // AI/ML terms
+    "LLM",
+    "llm",
+    "GPT",
+    "Claude",
+    "prompt",
+    "prompts",
+    "token",
+    "tokens",
+    "tokenizer",
+    "embeddings",
+    "model",
+    "models",
+    "inference",
+    "training",
+    "dataset",
+    "datasets",
+
+    // Authentication tokens and IDs (random strings should be ignored)
+    "uuid",
+    "UUID",
+    "guid",
+    "GUID",
+    "newuser",
+    "EFGH",
+    "toolu",
+    "Multimodal"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    ".git/**",
+    "dist/**",
+    "build/**"
+  ],
+  "ignoreRegExpList": [
+    // Base64 encoded strings
+    "/[A-Za-z0-9+/]{20,}={0,2}/g",
+    // UUIDs and similar IDs
+    "/\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b/g",
+    // Hex strings
+    "/\\b[0-9a-fA-F]{16,}\\b/g",
+    // API keys and tokens (patterns)
+    "/\\b[a-zA-Z0-9_-]{20,}\\b/g"
+  ]
+}

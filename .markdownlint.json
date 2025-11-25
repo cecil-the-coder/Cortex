@@ -1,0 +1,14 @@
+{
+  "default": true,
+  "MD013": { "line_length": 150, "code_blocks": false, "tables": false, "headings": false },
+  "MD033": { "allowed_elements": ["details", "summary", "sub", "sup", "kbd", "br", "hr"] },
+  "MD041": false,
+  "MD007": { "indent": 2 },
+  "MD024": { "allow_different_nesting": true },
+  "MD022": false,
+  "MD031": false,
+  "MD032": false,
+  "MD040": false,
+  "MD047": false,
+  "MD029": false
+}
