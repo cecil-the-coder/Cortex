@@ -65,7 +65,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
 
       - name: Cache go modules
@@ -89,7 +89,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            GO_VERSION=1.22
+            GO_VERSION=1.24
             GIT_SHA=${{ steps.git-sha.outputs.full_sha }}
             GIT_VERSION=${{ github.ref_name }}
           target: production

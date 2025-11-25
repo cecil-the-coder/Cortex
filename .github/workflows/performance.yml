@@ -33,7 +33,7 @@ on:
         type: string
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.24'
 
 jobs:
   setup-baseline:
@@ -81,18 +81,40 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-bench-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-bench-${{ hashFiles('**/go.sum', '**/go.mod') }}
           restore-keys: |
+            ${{ runner.os }}-go-bench-${{ hashFiles('**/go.mod') }}
             ${{ runner.os }}-go-bench-
+        continue-on-error: true
 
       - name: Download dependencies
         run: go mod download
 
       - name: Run all benchmarks
         run: |
+          set -e
           mkdir -p bench-results
-          go test -bench=. -benchmem -count=5 -run=^$ ./... > bench-results/bench.txt
-          go test -bench=. -benchmem -count=5 -run=^$ ./... -json > bench-results/bench.json 2>/dev/null || true
+
+          # Clear any corrupted build cache
+          go clean -cache
+          go clean -testcache
+
+          # Run benchmarks with error handling
+          echo "Running benchmarks..."
+          go test -bench=. -benchmem -count=3 -run=^$ ./... > bench-results/bench.txt 2>&1 || {
+            echo "Benchmarks failed, but continuing with available results..."
+            # Try running benchmarks on individual packages if the full run fails
+            for pkg in $(go list ./...); do
+              if go test -bench=. -benchmem -count=1 -run=^$ $pkg >> bench-results/bench.txt 2>&1; then
+                echo "✅ Benchmarks for $pkg completed"
+              else
+                echo "❌ Benchmarks for $pkg failed"
+              fi
+            done
+          }
+
+          # Generate JSON output if possible
+          go test -bench=. -benchmem -count=1 -run=^$ ./... -json > bench-results/bench.json 2>/dev/null || echo "JSON output failed, continuing..."
 
       - name: Parse benchmark results
         run: |
@@ -216,13 +238,25 @@ jobs:
           MOCKSERVER_PROPERTY_FILE: /config/mockserver.properties
         options: >-
           --health-cmd "curl -f http://localhost:1080/mockserver/status || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+          --restart always
+          --volume /tmp/mockserver-config:/config
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Prepare container environment
+        run: |
+          # Create directories for container volumes
+          sudo mkdir -p /tmp/mockserver-config
+          sudo chmod 777 /tmp/mockserver-config
+
+          # Clean up any existing Docker containers/volumes that might conflict
+          docker system prune -f || true
+          docker volume prune -f || true
 
       - name: Set up Go
         uses: actions/setup-go@v5

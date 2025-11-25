@@ -1,9 +1,9 @@
 # Multi-stage Dockerfile for Cortex LLM Router
 # Build stage - creates a minimal, secure Go binary
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Set build arguments
-ARG GO_VERSION=1.22
+ARG GO_VERSION=1.24
 ARG GIT_SHA
 ARG GIT_VERSION
 ARG TARGETOS
