@@ -93,6 +93,7 @@ jobs:
             GIT_SHA=${{ steps.git-sha.outputs.full_sha }}
             GIT_VERSION=${{ github.ref_name }}
           target: production
+          provenance: false
 
       - name: Generate SBOM
         if: github.event_name != 'pull_request'
