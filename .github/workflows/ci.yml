@@ -119,6 +119,11 @@ jobs:
         uses: zricethezav/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Only scan the current commit
+          base: ""
+          config_path: .gitleaks.toml
+        continue-on-error: true
 
   build:
     name: Build

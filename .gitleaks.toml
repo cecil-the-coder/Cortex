@@ -1,0 +1,13 @@
+title = "gitleaks config"
+
+# Extend the default ruleset with custom rules
+[extend]
+useDefault = true
+
+# Add any custom patterns here if needed
+[[rules]]
+description = "Ensure we don't accidentally commit secrets"
+id = "custom-secrets"
+regex = '''(?i)(password|secret|key|token|auth|credential|api_key|private_key).*=.*["']?[^"'\s]+["']?'''
+tags = ["secret", "key"]
+keywords = ["password", "secret", "key", "token", "auth", "credential", "api_key", "private_key"]
